@@ -16,7 +16,7 @@ public sealed class RoomCodeGenerator : IRoomCodeGenerator
         Span<char> chars = stackalloc char[RoomCode.Length];
         for (var i = 0; i < chars.Length; i++)
         {
-            chars[i] = Alphabet[bytes[i] % Alphabet.Length];
+            chars[i] = Alphabet[RandomNumberGenerator.GetInt32(Alphabet.Length)];
         }
 
         return RoomCode.From(new string(chars));
