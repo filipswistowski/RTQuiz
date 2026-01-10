@@ -21,17 +21,22 @@ public class GamesController : ControllerBase
 
     [HttpPost("{roomCode}/join")]
     public ActionResult<JoinGameResponse> Join(string roomCode, [FromBody] JoinGameRequest request,
-        [FromServices] IGameSessionStore store)
+    [FromServices] IGameSessionStore store)
     {
-        // Minimalnie: walidujemy długość/format przez Domain
         RoomCode code;
         try { code = RoomCode.From(roomCode); }
         catch { return NotFound(); }
 
-        if (!store.Exists(code))
-            return NotFound(); // 404 to standard dla “nie ma zasobu”. [web:521]
+        try
+        {
+            if (!store.TryJoin(code, request.PlayerName, out var player))
+                return NotFound();
 
-        var playerId = Guid.NewGuid().ToString("N");
-        return Ok(new JoinGameResponse(playerId));
+            return Ok(new JoinGameResponse(player.Id));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 }

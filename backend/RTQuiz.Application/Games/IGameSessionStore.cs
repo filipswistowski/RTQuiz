@@ -6,4 +6,6 @@ public interface IGameSessionStore
 {
     GameSession CreateNew();
     bool Exists(RoomCode roomCode);
+
+    bool TryJoin(RoomCode roomCode, string playerName, out Player player);
 }

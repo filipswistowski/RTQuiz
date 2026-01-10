@@ -29,4 +29,18 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
     }
 
     public bool Exists(RoomCode roomCode) => _sessions.ContainsKey(roomCode.Value);
+
+    public bool TryJoin(RoomCode roomCode, string playerName, out Player player)
+    {
+        player = default!;
+
+        if (!_sessions.TryGetValue(roomCode.Value, out var session))
+            return false;
+
+        lock (session)
+        {
+            player = session.AddPlayer(playerName);
+            return true;
+        }
+    }
 }
