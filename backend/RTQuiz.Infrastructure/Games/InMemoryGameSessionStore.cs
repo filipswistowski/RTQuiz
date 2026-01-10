@@ -43,4 +43,7 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
             return true;
         }
     }
+
+    public bool TryGet(RoomCode roomCode, out GameSession session)
+    => _sessions.TryGetValue(roomCode.Value, out session!);
 }

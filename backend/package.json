@@ -8,8 +8,8 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "@microsoft/signalr": "^10.0.0"
-  }
+  },
+  "description": ""
 }

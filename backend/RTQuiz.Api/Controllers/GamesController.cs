@@ -9,6 +9,8 @@ namespace RTQuiz.Api.Controllers;
 public sealed record JoinGameRequest(string PlayerName);
 public sealed record JoinGameResponse(string PlayerId);
 public sealed record CreateGameResponse(string RoomCode);
+public sealed record GetGameResponse(string RoomCode, List<PlayerDto> Players);
+public sealed record PlayerDto(string Id, string Name);
 
 [ApiController]
 [Route("api/games")]
@@ -45,10 +47,17 @@ public class GamesController : ControllerBase
             if (!store.TryJoin(code, request.PlayerName, out var player))
                 return NotFound();
 
-            // 3) Broadcast do wszystkich, którzy są podłączeni do SignalR group dla tego pokoju
+            // po TryJoin:
+            store.TryGet(code, out var session); // albo trzymaj session w TryJoin, jeśli wolisz
+
             await hubContext.Clients
                 .Group($"room:{code.Value}")
-                .SendAsync("PlayerJoined", new { playerId = player.Id, playerName = player.Name }); // [web:593]
+                .SendAsync("LobbyUpdated", new
+                {
+                    roomCode = code.Value,
+                    players = session.Players.Select(p => new { id = p.Id, name = p.Name })
+                });
+
 
             // 4) REST response: tylko playerId
             return Ok(new JoinGameResponse(player.Id));
@@ -58,5 +67,21 @@ public class GamesController : ControllerBase
             // np. walidacja playerName (2-20 znaków)
             return BadRequest(new { error = ex.Message });
         }
+    }
+
+    [HttpGet("{roomCode}")]
+    public ActionResult<GetGameResponse> Get(string roomCode, [FromServices] IGameSessionStore store)
+    {
+        RoomCode code;
+        try { code = RoomCode.From(roomCode); }
+        catch { return NotFound(); }
+
+        if (!store.TryGet(code, out var session))
+            return NotFound();
+
+        return Ok(new GetGameResponse(
+            code.Value,
+            session.Players.Select(p => new PlayerDto(p.Id, p.Name)).ToList()
+        ));
     }
 }
