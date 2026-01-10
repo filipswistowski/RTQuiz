@@ -12,6 +12,8 @@ builder.Services.AddOpenApi();
 
 builder.Services.AddSingleton<IRoomCodeGenerator, RoomCodeGenerator>();
 builder.Services.AddTransient<CreateGameService>();
+builder.Services.AddSingleton<IGameSessionStore, InMemoryGameSessionStore>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

@@ -1,6 +1,6 @@
-﻿using System.Security.Cryptography;
-using RTQuiz.Application.Games;
+﻿using RTQuiz.Application.Games;
 using RTQuiz.Domain.Games;
+using System.Security.Cryptography;
 
 namespace RTQuiz.Infrastructure.Games;
 
