@@ -11,13 +11,14 @@ public sealed record JoinGameResponse(string PlayerId);
 public sealed record CreateGameResponse(string RoomCode);
 public sealed record GetGameResponse(string RoomCode, List<PlayerDto> Players);
 public sealed record PlayerDto(string Id, string Name);
+public sealed record StartGameResponse(string RoomCode);
 
 [ApiController]
 [Route("api/games")]
 public class GamesController : ControllerBase
 {
     [HttpPost]
-    public ActionResult<CreateGameResponse> Create([FromServices] IGameSessionStore store, [FromServices] IHubContext<GameHub> hubContext)
+    public ActionResult<CreateGameResponse> Create([FromServices] IGameSessionStore store)
     {
         var session = store.CreateNew();
         return Ok(new CreateGameResponse(session.RoomCode.Value));
@@ -83,5 +84,51 @@ public class GamesController : ControllerBase
             code.Value,
             session.Players.Select(p => new PlayerDto(p.Id, p.Name)).ToList()
         ));
+    }
+
+    [HttpPost("{roomCode}/start")]
+    public async Task<ActionResult<StartGameResponse>> Start(
+    string roomCode,
+    [FromServices] IGameSessionStore store,
+    [FromServices] IQuestionBank questionBank,
+    [FromServices] IHubContext<GameHub> hubContext)
+    {
+        if (!Request.Headers.TryGetValue("X-Player-Id", out var playerIdValues))
+            return BadRequest(new { error = "Missing X-Player-Id header." });
+
+        var playerId = playerIdValues.ToString();
+
+        RoomCode code;
+        try { code = RoomCode.From(roomCode); }
+        catch { return NotFound(); }
+
+        if (!store.TryStart(code, playerId, out var session, out var error))
+        {
+            if (error == "NotFound")
+                return NotFound();
+
+            return BadRequest(new { error });
+        }
+
+        await hubContext.Clients
+            .Group($"room:{code.Value}")
+            .SendAsync("GameStarted", new { roomCode = code.Value });
+
+        var questions = questionBank.GetAll();
+        if (session.CurrentQuestionIndex >= 0 && session.CurrentQuestionIndex < questions.Count)
+        {
+            var q = questions[session.CurrentQuestionIndex];
+
+            await hubContext.Clients
+                .Group($"room:{code.Value}")
+                .SendAsync("QuestionPresented", new
+                {
+                    questionId = q.Id,
+                    text = q.Text,
+                    answers = q.Answers
+                });
+        }
+
+        return Ok(new StartGameResponse(code.Value));
     }
 }

@@ -46,4 +46,30 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
 
     public bool TryGet(RoomCode roomCode, out GameSession session)
     => _sessions.TryGetValue(roomCode.Value, out session!);
+
+    public bool TryStart(RoomCode roomCode, string playerId, out GameSession session, out string error)
+    {
+        error = "";
+        session = default!;
+
+        if (!_sessions.TryGetValue(roomCode.Value, out session))
+        {
+            error = "NotFound";
+            return false;
+        }
+
+        lock (session)
+        {
+            try
+            {
+                session.StartGame(playerId);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+    }
 }

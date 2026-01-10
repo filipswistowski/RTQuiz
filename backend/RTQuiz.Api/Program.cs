@@ -15,6 +15,9 @@ builder.Services.AddSignalR();
 builder.Services.AddSingleton<IRoomCodeGenerator, RoomCodeGenerator>();
 builder.Services.AddTransient<CreateGameService>();
 builder.Services.AddSingleton<IGameSessionStore, InMemoryGameSessionStore>();
+builder.Services.AddSingleton<IRoomCodeGenerator, RoomCodeGenerator>();
+builder.Services.AddSingleton<IGameSessionStore, InMemoryGameSessionStore>();
+builder.Services.AddSingleton<IQuestionBank, JsonQuestionBank>();
 
 var cors = "Frontend";
 

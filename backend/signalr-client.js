@@ -10,6 +10,10 @@ const connection = new signalR.HubConnectionBuilder()
 connection.on("JoinedRoom", (code) => console.log("JoinedRoom:", code));
 connection.on("PlayerJoined", (payload) => console.log("PlayerJoined:", payload));
 
+connection.on("LobbyUpdated", (payload) => console.log("LobbyUpdated:", payload));
+connection.on("GameStarted", (payload) => console.log("GameStarted:", payload));
+connection.on("QuestionPresented", (payload) => console.log("QuestionPresented:", payload));
+
 (async () => {
     await connection.start();
     console.log("Connected");

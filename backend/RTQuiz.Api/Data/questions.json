@@ -1,0 +1,14 @@
+﻿[
+  {
+    "id": "q1",
+    "text": "Ile to jest 2+2?",
+    "answers": [ "3", "4", "5", "22" ],
+    "correctIndex": 1
+  },
+  {
+    "id": "q2",
+    "text": "Stolica Polski to:",
+    "answers": [ "Kraków", "Gdańsk", "Warszawa", "Wrocław" ],
+    "correctIndex": 2
+  }
+]
