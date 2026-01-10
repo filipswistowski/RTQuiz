@@ -14,6 +14,11 @@ connection.on("LobbyUpdated", (payload) => console.log("LobbyUpdated:", payload)
 connection.on("GameStarted", (payload) => console.log("GameStarted:", payload));
 connection.on("QuestionPresented", (payload) => console.log("QuestionPresented:", payload));
 
+connection.on("AnswerSubmitted", (p) => console.log("AnswerSubmitted:", p));
+connection.on("AnswerRevealed", (p) => console.log("AnswerRevealed:", p));
+connection.on("ScoreboardUpdated", (p) => console.log("ScoreboardUpdated:", p));
+
+
 (async () => {
     await connection.start();
     console.log("Connected");

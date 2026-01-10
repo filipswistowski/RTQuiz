@@ -72,4 +72,89 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
             }
         }
     }
+
+    public bool TrySubmitAnswer(RoomCode roomCode, string playerId, int answerIndex, out GameSession session, out string error)
+    {
+        error = "";
+        session = default!;
+
+        if (!_sessions.TryGetValue(roomCode.Value, out session))
+        {
+            error = "NotFound";
+            return false;
+        }
+
+        lock (session)
+        {
+            try
+            {
+                session.SubmitAnswer(playerId, answerIndex);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+    }
+
+    public bool TryReveal(RoomCode roomCode, string playerId, int correctIndex, out GameSession session, out string error)
+    {
+        error = "";
+        session = default!;
+
+        if (!_sessions.TryGetValue(roomCode.Value, out session))
+        {
+            error = "NotFound";
+            return false;
+        }
+
+        lock (session)
+        {
+            try
+            {
+                // host-only enforced in GameSession.NextQuestion; here do it too:
+                if (session.HostPlayerId is null)
+                    throw new InvalidOperationException("Game has no host.");
+                if (playerId != session.HostPlayerId)
+                    throw new InvalidOperationException("Only host can reveal the answer.");
+
+                session.RevealAnswerAndScore(correctIndex);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+    }
+
+    public bool TryNext(RoomCode roomCode, string playerId, int totalQuestions, out GameSession session, out string error)
+    {
+        error = "";
+        session = default!;
+
+        if (!_sessions.TryGetValue(roomCode.Value, out session))
+        {
+            error = "NotFound";
+            return false;
+        }
+
+        lock (session)
+        {
+            try
+            {
+                session.NextQuestion(playerId, totalQuestions);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+    }
+
 }

@@ -10,12 +10,21 @@ public sealed class GameSession
 {
     private readonly List<Player> _players = new();
 
+    // per-question state
+    private readonly Dictionary<string, int> _currentAnswers = new(); // playerId -> answerIndex
+
+    // whole game state
+    private readonly Dictionary<string, int> _scores = new(); // playerId -> points
+
     public GameSession(RoomCode roomCode, DateTime createdAtUtc)
     {
         RoomCode = roomCode;
         CreatedAtUtc = createdAtUtc;
+
         Phase = GamePhase.Lobby;
         CurrentQuestionIndex = -1;
+
+        IsQuestionOpen = false;
     }
 
     public RoomCode RoomCode { get; }
@@ -26,6 +35,10 @@ public sealed class GameSession
     public string? HostPlayerId { get; private set; }
     public GamePhase Phase { get; private set; }
     public int CurrentQuestionIndex { get; private set; }
+
+    public bool IsQuestionOpen { get; private set; }
+
+    public IReadOnlyDictionary<string, int> Scores => _scores;
 
     public Player AddPlayer(string playerName)
     {
@@ -38,6 +51,9 @@ public sealed class GameSession
 
         if (HostPlayerId is null)
             HostPlayerId = player.Id;
+
+        if (!_scores.ContainsKey(player.Id))
+            _scores[player.Id] = 0;
 
         return player;
     }
@@ -58,5 +74,70 @@ public sealed class GameSession
 
         Phase = GamePhase.InProgress;
         CurrentQuestionIndex = 0;
+
+        _currentAnswers.Clear();
+        IsQuestionOpen = true;
+    }
+
+    public void SubmitAnswer(string playerId, int answerIndex)
+    {
+        if (Phase != GamePhase.InProgress)
+            throw new InvalidOperationException("Game not in progress.");
+
+        if (!IsQuestionOpen)
+            throw new InvalidOperationException("Question is closed.");
+
+        if (_players.All(p => p.Id != playerId))
+            throw new InvalidOperationException("Unknown player.");
+
+        if (answerIndex < 0)
+            throw new InvalidOperationException("Invalid answerIndex.");
+
+        // overwrite allowed
+        _currentAnswers[playerId] = answerIndex;
+
+        // ensure score slot exists
+        if (!_scores.ContainsKey(playerId))
+            _scores[playerId] = 0;
+    }
+
+    public void RevealAnswerAndScore(int correctIndex)
+    {
+        if (Phase != GamePhase.InProgress)
+            throw new InvalidOperationException("Game not in progress.");
+
+        if (!IsQuestionOpen)
+            throw new InvalidOperationException("Question already closed.");
+
+        IsQuestionOpen = false;
+
+        foreach (var (pid, ans) in _currentAnswers)
+        {
+            if (ans == correctIndex)
+                _scores[pid] = (_scores.TryGetValue(pid, out var pts) ? pts : 0) + 1;
+        }
+    }
+
+    public void NextQuestion(string playerId, int totalQuestions)
+    {
+        if (HostPlayerId is null)
+            throw new InvalidOperationException("Game has no host.");
+
+        if (playerId != HostPlayerId)
+            throw new InvalidOperationException("Only host can go next.");
+
+        if (Phase != GamePhase.InProgress)
+            throw new InvalidOperationException("Game not in progress.");
+
+        if (IsQuestionOpen)
+            throw new InvalidOperationException("Close current question first.");
+
+        var nextIndex = CurrentQuestionIndex + 1;
+        if (nextIndex >= totalQuestions)
+            throw new InvalidOperationException("No more questions.");
+
+        CurrentQuestionIndex = nextIndex;
+        _currentAnswers.Clear();
+        IsQuestionOpen = true;
     }
 }
