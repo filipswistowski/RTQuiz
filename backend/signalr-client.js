@@ -17,6 +17,7 @@ connection.on("QuestionPresented", (payload) => console.log("QuestionPresented:"
 connection.on("AnswerSubmitted", (p) => console.log("AnswerSubmitted:", p));
 connection.on("AnswerRevealed", (p) => console.log("AnswerRevealed:", p));
 connection.on("ScoreboardUpdated", (p) => console.log("ScoreboardUpdated:", p));
+connection.on("StateSync", (p) => console.log("StateSync:", JSON.stringify(p)));
 
 
 (async () => {

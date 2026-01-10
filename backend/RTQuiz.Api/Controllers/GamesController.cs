@@ -3,6 +3,8 @@ using RTQuiz.Application.Games;
 using RTQuiz.Domain.Games;
 using Microsoft.AspNetCore.SignalR;
 using RTQuiz.Api.Hubs;
+using RTQuiz.Api.Contracts;
+using RTQuiz.Api.Games;
 
 namespace RTQuiz.Api.Controllers;
 
@@ -253,5 +255,22 @@ public class GamesController : ControllerBase
             });
 
         return Ok(new NextResponse(code.Value));
+    }
+
+    [HttpGet("{roomCode}/state")]
+    public ActionResult<GameStateSync> State(
+    string roomCode,
+    [FromServices] IGameSessionStore store,
+    [FromServices] IQuestionBank questionBank)
+    {
+        RoomCode code;
+        try { code = RoomCode.From(roomCode); }
+        catch { return NotFound(); }
+
+        if (!store.TryGet(code, out var session))
+            return NotFound();
+
+        var snapshot = GameStateSyncBuilder.Build(session, questionBank);
+        return Ok(snapshot);
     }
 }
