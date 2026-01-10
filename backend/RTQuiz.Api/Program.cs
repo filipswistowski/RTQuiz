@@ -1,4 +1,5 @@
 using RTQuiz.Api.Hubs;
+using RTQuiz.Api.Services;
 using RTQuiz.Application.Games;
 using RTQuiz.Application.Games.CreateGame;
 using RTQuiz.Infrastructure.Games;
@@ -18,6 +19,7 @@ builder.Services.AddSingleton<IGameSessionStore, InMemoryGameSessionStore>();
 builder.Services.AddSingleton<IRoomCodeGenerator, RoomCodeGenerator>();
 builder.Services.AddSingleton<IGameSessionStore, InMemoryGameSessionStore>();
 builder.Services.AddSingleton<IQuestionBank, JsonQuestionBank>();
+builder.Services.AddHostedService<QuestionTimerService>();
 
 var cors = "Frontend";
 

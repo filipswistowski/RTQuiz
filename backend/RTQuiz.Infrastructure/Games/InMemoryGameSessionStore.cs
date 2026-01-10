@@ -157,4 +157,5 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
         }
     }
 
+    public IEnumerable<GameSession> GetAllSessions() => _sessions.Values;
 }

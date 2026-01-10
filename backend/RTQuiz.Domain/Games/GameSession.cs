@@ -9,6 +9,8 @@ public enum GamePhase
 public sealed class GameSession
 {
     private readonly List<Player> _players = new();
+    public DateTime? QuestionOpenedAtUtc { get; private set; }
+    public int QuestionDurationSeconds { get; private set; } = 15; // na start stałe 15s
 
     // per-question state
     private readonly Dictionary<string, int> _currentAnswers = new(); // playerId -> answerIndex
@@ -60,6 +62,7 @@ public sealed class GameSession
 
     public void StartGame(string playerId)
     {
+
         if (HostPlayerId is null)
             throw new InvalidOperationException("Game has no host.");
 
@@ -77,6 +80,7 @@ public sealed class GameSession
 
         _currentAnswers.Clear();
         IsQuestionOpen = true;
+        QuestionOpenedAtUtc = DateTime.UtcNow;
     }
 
     public void SubmitAnswer(string playerId, int answerIndex)
@@ -110,6 +114,7 @@ public sealed class GameSession
             throw new InvalidOperationException("Question already closed.");
 
         IsQuestionOpen = false;
+        QuestionOpenedAtUtc = null;
 
         foreach (var (pid, ans) in _currentAnswers)
         {
@@ -139,5 +144,14 @@ public sealed class GameSession
         CurrentQuestionIndex = nextIndex;
         _currentAnswers.Clear();
         IsQuestionOpen = true;
+        QuestionOpenedAtUtc = DateTime.UtcNow;
     }
+
+    public bool IsQuestionTimedOut(DateTime nowUtc)
+    {
+        if (!IsQuestionOpen) return false;
+        if (QuestionOpenedAtUtc is null) return false;
+        return nowUtc - QuestionOpenedAtUtc.Value >= TimeSpan.FromSeconds(QuestionDurationSeconds);
+    }
+
 }
