@@ -22,6 +22,7 @@ builder.Services.AddHostedService<QuestionTimerService>();
 builder.Services.AddHostedService<SessionCleanupService>();
 builder.Services.AddSingleton<InMemoryGameSessionStore>();
 builder.Services.AddSingleton<IGameSessionStore>(sp => sp.GetRequiredService<InMemoryGameSessionStore>());
+builder.Services.AddSingleton<InMemoryPresenceStore>();
 
 
 builder.Services
