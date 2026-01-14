@@ -144,6 +144,7 @@ public class GamesController : ControllerBase
     string roomCode,
     [FromBody] SubmitAnswerRequest request,
     [FromServices] IGameSessionStore store,
+    [FromServices] IQuestionBank questionBank,
     [FromServices] IHubContext<GameHub> hubContext)
     {
         if (!Request.Headers.TryGetValue("X-Player-Id", out var playerIdValues))
@@ -155,7 +156,19 @@ public class GamesController : ControllerBase
         try { code = RoomCode.From(roomCode); }
         catch { return NotFound(); }
 
-        if (!store.TrySubmitAnswer(code, playerId, request.AnswerIndex, out var session, out var error))
+        if (!store.TryGet(code, out var session))
+            return NotFound();
+
+        // Determine answersCount from the current question to validate answerIndex properly.
+        var questions = questionBank.GetAll();
+
+        if (session.CurrentQuestionIndex < 0 || session.CurrentQuestionIndex >= questions.Count)
+            return BadRequest(new { error = "Invalid question index." });
+
+        var q = questions[session.CurrentQuestionIndex];
+        var answersCount = q.Answers.Count;
+
+        if (!store.TrySubmitAnswer(code, playerId, request.AnswerIndex, answersCount, out session, out var error))
         {
             if (error == "NotFound") return NotFound();
             return BadRequest(new { error });

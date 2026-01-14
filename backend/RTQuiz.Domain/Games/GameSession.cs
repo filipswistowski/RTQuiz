@@ -89,8 +89,14 @@ public sealed class GameSession
         Touch();
     }
 
-    public void SubmitAnswer(string playerId, int answerIndex)
+    public void SubmitAnswer(string playerId, int answerIndex, int answersCount)
     {
+        if (answersCount <= 0)
+            throw new InvalidOperationException("Question has no answers.");
+
+        if (answerIndex < 0 || answerIndex >= answersCount)
+            throw new InvalidOperationException("Invalid answerIndex.");
+
         if (Phase != GamePhase.InProgress)
             throw new InvalidOperationException("Game not in progress.");
 
@@ -99,9 +105,6 @@ public sealed class GameSession
 
         if (_players.All(p => p.Id != playerId))
             throw new InvalidOperationException("Unknown player.");
-
-        if (answerIndex < 0)
-            throw new InvalidOperationException("Invalid answerIndex.");
 
         // overwrite allowed
         _currentAnswers[playerId] = answerIndex;

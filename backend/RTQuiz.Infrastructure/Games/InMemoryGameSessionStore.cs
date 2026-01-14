@@ -75,7 +75,7 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
         }
     }
 
-    public bool TrySubmitAnswer(RoomCode roomCode, string playerId, int answerIndex, out GameSession session, out string error)
+    public bool TrySubmitAnswer(RoomCode roomCode, string playerId, int answerIndex, int answersCount, out GameSession session, out string error)
     {
         error = "";
         session = default!;
@@ -90,7 +90,7 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
         {
             try
             {
-                session.SubmitAnswer(playerId, answerIndex);
+                session.SubmitAnswer(playerId, answerIndex, answersCount);
                 session.Touch();
                 return true;
             }
