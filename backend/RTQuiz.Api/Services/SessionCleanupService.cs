@@ -1,32 +1,36 @@
-﻿using RTQuiz.Domain.Games;
+﻿using Microsoft.Extensions.Options;
+using RTQuiz.Api.Options;
+using RTQuiz.Domain.Games;
 using RTQuiz.Infrastructure.Games;
 
 namespace RTQuiz.Api.Services;
 
 public sealed class SessionCleanupService : BackgroundService
 {
-    private static readonly TimeSpan LobbyTtl = TimeSpan.FromMinutes(20);
-    private static readonly TimeSpan InProgressTtl = TimeSpan.FromMinutes(60);
-    private static readonly TimeSpan Tick = TimeSpan.FromMinutes(1);
-
     private readonly InMemoryGameSessionStore _store;
+    private readonly SessionCleanupOptions _opt;
 
-    public SessionCleanupService(InMemoryGameSessionStore store)
+    public SessionCleanupService(InMemoryGameSessionStore store, IOptions<SessionCleanupOptions> opt)
     {
         _store = store;
+        _opt = opt.Value;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var tick = TimeSpan.FromSeconds(_opt.TickSeconds);
+        var lobbyTtl = TimeSpan.FromMinutes(_opt.LobbyTtlMinutes);
+        var inProgressTtl = TimeSpan.FromMinutes(_opt.InProgressTtlMinutes);
+
         while (!stoppingToken.IsCancellationRequested)
         {
-            await Task.Delay(Tick, stoppingToken);
+            await Task.Delay(tick, stoppingToken);
 
             var now = DateTime.UtcNow;
 
             foreach (var session in _store.GetAllSessions())
             {
-                var ttl = session.Phase == GamePhase.Lobby ? LobbyTtl : InProgressTtl;
+                var ttl = session.Phase == GamePhase.Lobby ? lobbyTtl : inProgressTtl;
                 var expired = now - session.LastActivityUtc > ttl;
 
                 if (!expired) continue;
