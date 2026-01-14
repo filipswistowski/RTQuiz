@@ -20,6 +20,7 @@ builder.Services.AddSingleton<IRoomCodeGenerator, RoomCodeGenerator>();
 builder.Services.AddSingleton<IGameSessionStore, InMemoryGameSessionStore>();
 builder.Services.AddSingleton<IQuestionBank, JsonQuestionBank>();
 builder.Services.AddHostedService<QuestionTimerService>();
+builder.Services.AddHostedService<SessionCleanupService>();
 
 var cors = "Frontend";
 

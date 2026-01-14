@@ -11,6 +11,8 @@ public sealed class GameSession
     private readonly List<Player> _players = new();
     public DateTime? QuestionOpenedAtUtc { get; private set; }
     public int QuestionDurationSeconds { get; private set; } = 15; // na start stałe 15s
+    public DateTime LastActivityUtc { get; private set; } = DateTime.UtcNow;
+    public void Touch() => LastActivityUtc = DateTime.UtcNow;
 
     // per-question state
     private readonly Dictionary<string, int> _currentAnswers = new(); // playerId -> answerIndex
@@ -57,6 +59,7 @@ public sealed class GameSession
         if (!_scores.ContainsKey(player.Id))
             _scores[player.Id] = 0;
 
+        Touch();
         return player;
     }
 
@@ -81,6 +84,7 @@ public sealed class GameSession
         _currentAnswers.Clear();
         IsQuestionOpen = true;
         QuestionOpenedAtUtc = DateTime.UtcNow;
+        Touch();
     }
 
     public void SubmitAnswer(string playerId, int answerIndex)
@@ -103,6 +107,8 @@ public sealed class GameSession
         // ensure score slot exists
         if (!_scores.ContainsKey(playerId))
             _scores[playerId] = 0;
+
+        Touch();
     }
 
     public void RevealAnswerAndScore(int correctIndex)
@@ -121,6 +127,8 @@ public sealed class GameSession
             if (ans == correctIndex)
                 _scores[pid] = (_scores.TryGetValue(pid, out var pts) ? pts : 0) + 1;
         }
+
+        Touch();
     }
 
     public void NextQuestion(string playerId, int totalQuestions)
@@ -145,6 +153,7 @@ public sealed class GameSession
         _currentAnswers.Clear();
         IsQuestionOpen = true;
         QuestionOpenedAtUtc = DateTime.UtcNow;
+        Touch();
     }
 
     public bool IsQuestionTimedOut(DateTime nowUtc)
