@@ -1,4 +1,5 @@
 using RTQuiz.Api.Hubs;
+using RTQuiz.Api.Options;
 using RTQuiz.Api.Services;
 using RTQuiz.Application.Games;
 using RTQuiz.Application.Games.CreateGame;
@@ -15,11 +16,28 @@ builder.Services.AddSignalR();
 
 builder.Services.AddSingleton<IRoomCodeGenerator, RoomCodeGenerator>();
 builder.Services.AddTransient<CreateGameService>();
-builder.Services.AddSingleton<IGameSessionStore, InMemoryGameSessionStore>();
 builder.Services.AddSingleton<IRoomCodeGenerator, RoomCodeGenerator>();
-builder.Services.AddSingleton<IGameSessionStore, InMemoryGameSessionStore>();
 builder.Services.AddSingleton<IQuestionBank, JsonQuestionBank>();
 builder.Services.AddHostedService<QuestionTimerService>();
+builder.Services.AddHostedService<SessionCleanupService>();
+builder.Services.AddSingleton<InMemoryGameSessionStore>();
+builder.Services.AddSingleton<IGameSessionStore>(sp => sp.GetRequiredService<InMemoryGameSessionStore>());
+builder.Services.AddSingleton<InMemoryPresenceStore>();
+
+
+builder.Services
+    .AddOptions<SessionCleanupOptions>()
+    .BindConfiguration(SessionCleanupOptions.SectionName);
+
+builder.Services
+    .AddOptions<SessionCleanupOptions>()
+    .BindConfiguration(SessionCleanupOptions.SectionName)
+    .Validate(o =>
+        o.TickSeconds is >= 5 and <= 3600 &&
+        o.LobbyTtlMinutes is >= 1 and <= 24 * 60 &&
+        o.InProgressTtlMinutes is >= 1 and <= 24 * 60,
+        "Invalid SessionCleanup options.")
+    .ValidateOnStart();
 
 var cors = "Frontend";
 

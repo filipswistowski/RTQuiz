@@ -4,6 +4,7 @@ public enum GamePhase
 {
     Lobby = 0,
     InProgress = 1,
+    Finished = 2
 }
 
 public sealed class GameSession
@@ -11,6 +12,9 @@ public sealed class GameSession
     private readonly List<Player> _players = new();
     public DateTime? QuestionOpenedAtUtc { get; private set; }
     public int QuestionDurationSeconds { get; private set; } = 15; // na start stałe 15s
+    public DateTime LastActivityUtc { get; private set; } = DateTime.UtcNow;
+    public void Touch() => LastActivityUtc = DateTime.UtcNow;
+    public IReadOnlyDictionary<string, int> CurrentAnswers => _currentAnswers;
 
     // per-question state
     private readonly Dictionary<string, int> _currentAnswers = new(); // playerId -> answerIndex
@@ -57,6 +61,7 @@ public sealed class GameSession
         if (!_scores.ContainsKey(player.Id))
             _scores[player.Id] = 0;
 
+        Touch();
         return player;
     }
 
@@ -81,10 +86,17 @@ public sealed class GameSession
         _currentAnswers.Clear();
         IsQuestionOpen = true;
         QuestionOpenedAtUtc = DateTime.UtcNow;
+        Touch();
     }
 
-    public void SubmitAnswer(string playerId, int answerIndex)
+    public void SubmitAnswer(string playerId, int answerIndex, int answersCount)
     {
+        if (answersCount <= 0)
+            throw new InvalidOperationException("Question has no answers.");
+
+        if (answerIndex < 0 || answerIndex >= answersCount)
+            throw new InvalidOperationException("Invalid answerIndex.");
+
         if (Phase != GamePhase.InProgress)
             throw new InvalidOperationException("Game not in progress.");
 
@@ -94,15 +106,14 @@ public sealed class GameSession
         if (_players.All(p => p.Id != playerId))
             throw new InvalidOperationException("Unknown player.");
 
-        if (answerIndex < 0)
-            throw new InvalidOperationException("Invalid answerIndex.");
-
         // overwrite allowed
         _currentAnswers[playerId] = answerIndex;
 
         // ensure score slot exists
         if (!_scores.ContainsKey(playerId))
             _scores[playerId] = 0;
+
+        Touch();
     }
 
     public void RevealAnswerAndScore(int correctIndex)
@@ -121,6 +132,8 @@ public sealed class GameSession
             if (ans == correctIndex)
                 _scores[pid] = (_scores.TryGetValue(pid, out var pts) ? pts : 0) + 1;
         }
+
+        Touch();
     }
 
     public void NextQuestion(string playerId, int totalQuestions)
@@ -139,12 +152,16 @@ public sealed class GameSession
 
         var nextIndex = CurrentQuestionIndex + 1;
         if (nextIndex >= totalQuestions)
-            throw new InvalidOperationException("No more questions.");
+        {
+            FinishGame();
+            return;
+        }
 
         CurrentQuestionIndex = nextIndex;
         _currentAnswers.Clear();
         IsQuestionOpen = true;
         QuestionOpenedAtUtc = DateTime.UtcNow;
+        Touch();
     }
 
     public bool IsQuestionTimedOut(DateTime nowUtc)
@@ -154,4 +171,17 @@ public sealed class GameSession
         return nowUtc - QuestionOpenedAtUtc.Value >= TimeSpan.FromSeconds(QuestionDurationSeconds);
     }
 
+    public void FinishGame()
+    {
+        if (Phase == GamePhase.Finished)
+            return;
+
+        if (Phase != GamePhase.InProgress)
+            throw new InvalidOperationException("Game not in progress.");
+
+        Phase = GamePhase.Finished;
+        IsQuestionOpen = false;
+        QuestionOpenedAtUtc = null;
+        Touch();
+    }
 }

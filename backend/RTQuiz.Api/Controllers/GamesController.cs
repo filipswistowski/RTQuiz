@@ -1,10 +1,11 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using RTQuiz.Application.Games;
-using RTQuiz.Domain.Games;
 using Microsoft.AspNetCore.SignalR;
-using RTQuiz.Api.Hubs;
 using RTQuiz.Api.Contracts;
 using RTQuiz.Api.Games;
+using RTQuiz.Api.Hubs;
+using RTQuiz.Api.Services;
+using RTQuiz.Application.Games;
+using RTQuiz.Domain.Games;
 
 namespace RTQuiz.Api.Controllers;
 
@@ -143,6 +144,7 @@ public class GamesController : ControllerBase
     string roomCode,
     [FromBody] SubmitAnswerRequest request,
     [FromServices] IGameSessionStore store,
+    [FromServices] IQuestionBank questionBank,
     [FromServices] IHubContext<GameHub> hubContext)
     {
         if (!Request.Headers.TryGetValue("X-Player-Id", out var playerIdValues))
@@ -154,7 +156,19 @@ public class GamesController : ControllerBase
         try { code = RoomCode.From(roomCode); }
         catch { return NotFound(); }
 
-        if (!store.TrySubmitAnswer(code, playerId, request.AnswerIndex, out var session, out var error))
+        if (!store.TryGet(code, out var session))
+            return NotFound();
+
+        // Determine answersCount from the current question to validate answerIndex properly.
+        var questions = questionBank.GetAll();
+
+        if (session.CurrentQuestionIndex < 0 || session.CurrentQuestionIndex >= questions.Count)
+            return BadRequest(new { error = "Invalid question index." });
+
+        var q = questions[session.CurrentQuestionIndex];
+        var answersCount = q.Answers.Count;
+
+        if (!store.TrySubmitAnswer(code, playerId, request.AnswerIndex, answersCount, out session, out var error))
         {
             if (error == "NotFound") return NotFound();
             return BadRequest(new { error });
@@ -202,6 +216,33 @@ public class GamesController : ControllerBase
             .Group($"room:{code.Value}")
             .SendAsync("AnswerRevealed", new { questionId = q.Id, correctIndex = q.CorrectIndex });
 
+        var totalPlayers = session.Players.Count;
+        var totalAnswered = session.CurrentAnswers.Count;
+
+        var counts = new int[q.Answers.Count];
+        foreach (var kv in session.CurrentAnswers)
+        {
+            var answerIndex = kv.Value;
+            if (answerIndex >= 0 && answerIndex < counts.Length)
+                counts[answerIndex]++;
+        }
+
+        var percentages = counts
+            .Select(c => totalAnswered == 0 ? 0.0 : Math.Round((double)c * 100.0 / totalAnswered, 1))
+            .ToArray();
+
+        await hubContext.Clients
+            .Group($"room:{code.Value}")
+            .SendAsync("AnswerStatsRevealed", new
+            {
+                roomCode = code.Value,
+                questionId = q.Id,
+                totalPlayers,
+                totalAnswered,
+                counts,
+                percentages
+            });
+
         var scoresPayload = session.Players
             .Select(p => new
             {
@@ -234,7 +275,8 @@ public class GamesController : ControllerBase
         try { code = RoomCode.From(roomCode); }
         catch { return NotFound(); }
 
-        var total = questionBank.GetAll().Count;
+        var questions = questionBank.GetAll();
+        var total = questions.Count;
 
         if (!store.TryNext(code, playerId, total, out var session, out var error))
         {
@@ -242,7 +284,34 @@ public class GamesController : ControllerBase
             return BadRequest(new { error });
         }
 
-        var questions = questionBank.GetAll();
+        // If we've just finished the game (no more questions), broadcast final scoreboard.
+        if (session.Phase == GamePhase.Finished)
+        {
+            var finalScores = session.Players
+                .Select(p => new
+                {
+                    playerId = p.Id,
+                    name = p.Name,
+                    points = session.Scores.TryGetValue(p.Id, out var pts) ? pts : 0
+                })
+                .OrderByDescending(x => x.points)
+                .ToList();
+
+            await hubContext.Clients
+                .Group($"room:{code.Value}")
+                .SendAsync("GameFinished", new
+                {
+                    roomCode = code.Value,
+                    scores = finalScores
+                });
+
+            return Ok(new NextResponse(code.Value));
+        }
+
+        // Normal path: present next question
+        if (session.CurrentQuestionIndex < 0 || session.CurrentQuestionIndex >= questions.Count)
+            return BadRequest(new { error = "Invalid question index." });
+
         var q = questions[session.CurrentQuestionIndex];
 
         await hubContext.Clients
@@ -261,7 +330,9 @@ public class GamesController : ControllerBase
     public ActionResult<GameStateSync> State(
     string roomCode,
     [FromServices] IGameSessionStore store,
-    [FromServices] IQuestionBank questionBank)
+    [FromServices] IQuestionBank questionBank,
+    [FromServices] InMemoryPresenceStore presence
+)
     {
         RoomCode code;
         try { code = RoomCode.From(roomCode); }
@@ -270,7 +341,7 @@ public class GamesController : ControllerBase
         if (!store.TryGet(code, out var session))
             return NotFound();
 
-        var snapshot = GameStateSyncBuilder.Build(session, questionBank);
+        var snapshot = GameStateSyncBuilder.Build(session, questionBank, presence);
         return Ok(snapshot);
     }
 }

@@ -40,6 +40,7 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
         lock (session)
         {
             player = session.AddPlayer(playerName);
+            session.Touch();
             return true;
         }
     }
@@ -63,6 +64,7 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
             try
             {
                 session.StartGame(playerId);
+                session.Touch();
                 return true;
             }
             catch (Exception ex)
@@ -73,7 +75,7 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
         }
     }
 
-    public bool TrySubmitAnswer(RoomCode roomCode, string playerId, int answerIndex, out GameSession session, out string error)
+    public bool TrySubmitAnswer(RoomCode roomCode, string playerId, int answerIndex, int answersCount, out GameSession session, out string error)
     {
         error = "";
         session = default!;
@@ -88,7 +90,8 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
         {
             try
             {
-                session.SubmitAnswer(playerId, answerIndex);
+                session.SubmitAnswer(playerId, answerIndex, answersCount);
+                session.Touch();
                 return true;
             }
             catch (Exception ex)
@@ -121,6 +124,8 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
                     throw new InvalidOperationException("Only host can reveal the answer.");
 
                 session.RevealAnswerAndScore(correctIndex);
+
+                session.Touch();
                 return true;
             }
             catch (Exception ex)
@@ -147,6 +152,7 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
             try
             {
                 session.NextQuestion(playerId, totalQuestions);
+                session.Touch();
                 return true;
             }
             catch (Exception ex)
@@ -158,4 +164,5 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
     }
 
     public IEnumerable<GameSession> GetAllSessions() => _sessions.Values;
+    public bool TryRemove(RoomCode roomCode) => _sessions.TryRemove(roomCode.Value, out _);
 }

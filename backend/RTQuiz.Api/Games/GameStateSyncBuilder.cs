@@ -1,4 +1,5 @@
 ﻿using RTQuiz.Api.Contracts;
+using RTQuiz.Api.Services;
 using RTQuiz.Application.Games;
 using RTQuiz.Domain.Games;
 
@@ -6,7 +7,7 @@ namespace RTQuiz.Api.Games;
 
 public static class GameStateSyncBuilder
 {
-    public static GameStateSync Build(GameSession session, IQuestionBank questionBank)
+    public static GameStateSync Build(GameSession session, IQuestionBank questionBank, InMemoryPresenceStore presence)
     {
         // NOTE (latency compensation):
         // We send the server timestamp along with "questionEndsInMs" so the client can estimate
@@ -32,7 +33,7 @@ public static class GameStateSyncBuilder
 
         GameStateQuestionDto? currentQuestion = null;
 
-        if (session.Phase == GamePhase.InProgress)
+        if (session.Phase == GamePhase.InProgress && session.IsQuestionOpen)
         {
             var questions = questionBank.GetAll();
             if (session.CurrentQuestionIndex >= 0 && session.CurrentQuestionIndex < questions.Count)
@@ -52,12 +53,15 @@ public static class GameStateSyncBuilder
             .OrderByDescending(s => s.Points)
             .ToList();
 
+        var onlinePlayerIds = presence.GetOnlinePlayerIds(session.RoomCode.Value).ToList();
+
         return new GameStateSync(
             session.RoomCode.Value,
             session.Phase.ToString(),
             session.IsQuestionOpen,
             questionEndsInMs,
             serverNowUtcMs,
+            onlinePlayerIds,
             players,
             currentQuestion,
             scores
