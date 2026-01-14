@@ -1,10 +1,11 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using RTQuiz.Application.Games;
-using RTQuiz.Domain.Games;
 using Microsoft.AspNetCore.SignalR;
-using RTQuiz.Api.Hubs;
 using RTQuiz.Api.Contracts;
 using RTQuiz.Api.Games;
+using RTQuiz.Api.Hubs;
+using RTQuiz.Api.Services;
+using RTQuiz.Application.Games;
+using RTQuiz.Domain.Games;
 
 namespace RTQuiz.Api.Controllers;
 
@@ -261,7 +262,9 @@ public class GamesController : ControllerBase
     public ActionResult<GameStateSync> State(
     string roomCode,
     [FromServices] IGameSessionStore store,
-    [FromServices] IQuestionBank questionBank)
+    [FromServices] IQuestionBank questionBank,
+    [FromServices] InMemoryPresenceStore presence
+)
     {
         RoomCode code;
         try { code = RoomCode.From(roomCode); }
@@ -270,7 +273,7 @@ public class GamesController : ControllerBase
         if (!store.TryGet(code, out var session))
             return NotFound();
 
-        var snapshot = GameStateSyncBuilder.Build(session, questionBank);
+        var snapshot = GameStateSyncBuilder.Build(session, questionBank, presence);
         return Ok(snapshot);
     }
 }

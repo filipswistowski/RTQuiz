@@ -6,6 +6,7 @@ public sealed record GameStateSync(
     bool IsQuestionOpen,
     long? QuestionEndsInMs,
     long ServerNowUtcMs,
+    List<string> OnlinePlayerIds,
     List<GameStatePlayerDto> Players,
     GameStateQuestionDto? CurrentQuestion,
     List<GameStateScoreDto> Scores
