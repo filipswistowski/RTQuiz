@@ -87,6 +87,34 @@ public sealed class QuestionTimerService : BackgroundService
             .Group($"room:{room}")
             .SendAsync("AnswerRevealed", new { questionId = q.Id, correctIndex = q.CorrectIndex }, ct);
 
+        // Answer distribution (shown to all players after reveal)
+        var totalPlayers = session.Players.Count;
+        var totalAnswered = session.CurrentAnswers.Count;
+
+        var counts = new int[q.Answers.Count];
+        foreach (var kv in session.CurrentAnswers)
+        {
+            var answerIndex = kv.Value;
+            if (answerIndex >= 0 && answerIndex < counts.Length)
+                counts[answerIndex]++;
+        }
+
+        var percentages = counts
+            .Select(c => totalAnswered == 0 ? 0.0 : Math.Round((double)c * 100.0 / totalAnswered, 1))
+            .ToArray();
+
+        await _hub.Clients
+            .Group($"room:{room}")
+            .SendAsync("AnswerStatsRevealed", new
+            {
+                roomCode = room,
+                questionId = q.Id,
+                totalPlayers,
+                totalAnswered,
+                counts,
+                percentages
+            }, ct);
+
         var scoresPayload = session.Players
             .Select(p => new
             {

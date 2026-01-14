@@ -203,6 +203,33 @@ public class GamesController : ControllerBase
             .Group($"room:{code.Value}")
             .SendAsync("AnswerRevealed", new { questionId = q.Id, correctIndex = q.CorrectIndex });
 
+        var totalPlayers = session.Players.Count;
+        var totalAnswered = session.CurrentAnswers.Count;
+
+        var counts = new int[q.Answers.Count];
+        foreach (var kv in session.CurrentAnswers)
+        {
+            var answerIndex = kv.Value;
+            if (answerIndex >= 0 && answerIndex < counts.Length)
+                counts[answerIndex]++;
+        }
+
+        var percentages = counts
+            .Select(c => totalAnswered == 0 ? 0.0 : Math.Round((double)c * 100.0 / totalAnswered, 1))
+            .ToArray();
+
+        await hubContext.Clients
+            .Group($"room:{code.Value}")
+            .SendAsync("AnswerStatsRevealed", new
+            {
+                roomCode = code.Value,
+                questionId = q.Id,
+                totalPlayers,
+                totalAnswered,
+                counts,
+                percentages
+            });
+
         var scoresPayload = session.Players
             .Select(p => new
             {

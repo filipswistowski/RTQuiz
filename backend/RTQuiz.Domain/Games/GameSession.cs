@@ -14,6 +14,7 @@ public sealed class GameSession
     public int QuestionDurationSeconds { get; private set; } = 15; // na start stałe 15s
     public DateTime LastActivityUtc { get; private set; } = DateTime.UtcNow;
     public void Touch() => LastActivityUtc = DateTime.UtcNow;
+    public IReadOnlyDictionary<string, int> CurrentAnswers => _currentAnswers;
 
     // per-question state
     private readonly Dictionary<string, int> _currentAnswers = new(); // playerId -> answerIndex
