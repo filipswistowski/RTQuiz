@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using RTQuiz.Api.Contracts;
 using RTQuiz.Api.Games;
@@ -139,6 +140,7 @@ public class GamesController : ControllerBase
         return Ok(new StartGameResponse(code.Value));
     }
 
+    [EnableRateLimiting("AnswerPerPlayerPerRoom")]
     [HttpPost("{roomCode}/answer")]
     public async Task<ActionResult<SubmitAnswerResponse>> Answer(
     string roomCode,
