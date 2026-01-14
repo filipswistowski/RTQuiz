@@ -235,7 +235,8 @@ public class GamesController : ControllerBase
         try { code = RoomCode.From(roomCode); }
         catch { return NotFound(); }
 
-        var total = questionBank.GetAll().Count;
+        var questions = questionBank.GetAll();
+        var total = questions.Count;
 
         if (!store.TryNext(code, playerId, total, out var session, out var error))
         {
@@ -243,7 +244,34 @@ public class GamesController : ControllerBase
             return BadRequest(new { error });
         }
 
-        var questions = questionBank.GetAll();
+        // If we've just finished the game (no more questions), broadcast final scoreboard.
+        if (session.Phase == GamePhase.Finished)
+        {
+            var finalScores = session.Players
+                .Select(p => new
+                {
+                    playerId = p.Id,
+                    name = p.Name,
+                    points = session.Scores.TryGetValue(p.Id, out var pts) ? pts : 0
+                })
+                .OrderByDescending(x => x.points)
+                .ToList();
+
+            await hubContext.Clients
+                .Group($"room:{code.Value}")
+                .SendAsync("GameFinished", new
+                {
+                    roomCode = code.Value,
+                    scores = finalScores
+                });
+
+            return Ok(new NextResponse(code.Value));
+        }
+
+        // Normal path: present next question
+        if (session.CurrentQuestionIndex < 0 || session.CurrentQuestionIndex >= questions.Count)
+            return BadRequest(new { error = "Invalid question index." });
+
         var q = questions[session.CurrentQuestionIndex];
 
         await hubContext.Clients

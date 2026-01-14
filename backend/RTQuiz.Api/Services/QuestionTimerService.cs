@@ -24,23 +24,27 @@ public sealed class QuestionTimerService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // tick co 250ms wystarczy na dev; można podbić do 1s
         var tick = TimeSpan.FromMilliseconds(250);
 
         while (!stoppingToken.IsCancellationRequested)
         {
             await Task.Delay(tick, stoppingToken);
 
-            // potrzebujemy enumeracji sesji -> korzystamy z implementacji in-memory
+            // This timer only supports the in-memory store implementation.
             if (_store is not InMemoryGameSessionStore mem)
                 continue;
 
             var now = DateTime.UtcNow;
             var questions = _questionBank.GetAll();
+            if (questions.Count == 0)
+                continue;
 
             foreach (var session in mem.GetAllSessions())
             {
-                // unikamy race: blokujemy per session jak już robisz w store
+                // Copy everything needed for async work outside the lock
+                Question? revealedQuestion = null;
+                bool gameFinished = false;
+
                 lock (session)
                 {
                     if (!session.IsQuestionTimedOut(now))
@@ -49,19 +53,33 @@ public sealed class QuestionTimerService : BackgroundService
                     if (session.CurrentQuestionIndex < 0 || session.CurrentQuestionIndex >= questions.Count)
                         continue;
 
-                    var q = questions[session.CurrentQuestionIndex];
+                    revealedQuestion = questions[session.CurrentQuestionIndex];
 
-                    // to zamknie pytanie i naliczy punkty
-                    session.RevealAnswerAndScore(q.CorrectIndex);
+                    // Close question + score
+                    session.RevealAnswerAndScore(revealedQuestion.CorrectIndex);
 
-                    // eventy wyślemy już poza lockiem (żeby nie trzymać locka na await)
-                    _ = FireEventsAsync(session, q, stoppingToken);
+                    // Auto-finish if this was the last question
+                    if (session.CurrentQuestionIndex >= questions.Count - 1 && session.Phase != GamePhase.Finished)
+                    {
+                        session.FinishGame();
+                        gameFinished = true;
+                    }
+
+                }
+
+                // Fire events outside lock (don't block other requests)
+                if (revealedQuestion is not null)
+                {
+                    _ = FireRevealAndScoreboardAsync(session, revealedQuestion, stoppingToken);
+
+                    if (gameFinished)
+                        _ = FireGameFinishedAsync(session, stoppingToken);
                 }
             }
         }
     }
 
-    private async Task FireEventsAsync(GameSession session, Question q, CancellationToken ct)
+    private async Task FireRevealAndScoreboardAsync(GameSession session, Question q, CancellationToken ct)
     {
         var room = session.RoomCode.Value;
 
@@ -76,10 +94,30 @@ public sealed class QuestionTimerService : BackgroundService
                 name = p.Name,
                 points = session.Scores.TryGetValue(p.Id, out var pts) ? pts : 0
             })
+            .OrderByDescending(x => x.points)
             .ToList();
 
         await _hub.Clients
             .Group($"room:{room}")
             .SendAsync("ScoreboardUpdated", new { roomCode = room, scores = scoresPayload }, ct);
+    }
+
+    private async Task FireGameFinishedAsync(GameSession session, CancellationToken ct)
+    {
+        var room = session.RoomCode.Value;
+
+        var finalScores = session.Players
+            .Select(p => new
+            {
+                playerId = p.Id,
+                name = p.Name,
+                points = session.Scores.TryGetValue(p.Id, out var pts) ? pts : 0
+            })
+            .OrderByDescending(x => x.points)
+            .ToList();
+
+        await _hub.Clients
+            .Group($"room:{room}")
+            .SendAsync("GameFinished", new { roomCode = room, scores = finalScores }, ct);
     }
 }

@@ -33,7 +33,7 @@ public static class GameStateSyncBuilder
 
         GameStateQuestionDto? currentQuestion = null;
 
-        if (session.Phase == GamePhase.InProgress)
+        if (session.Phase == GamePhase.InProgress && session.IsQuestionOpen)
         {
             var questions = questionBank.GetAll();
             if (session.CurrentQuestionIndex >= 0 && session.CurrentQuestionIndex < questions.Count)

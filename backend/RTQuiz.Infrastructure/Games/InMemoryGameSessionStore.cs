@@ -124,6 +124,7 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
                     throw new InvalidOperationException("Only host can reveal the answer.");
 
                 session.RevealAnswerAndScore(correctIndex);
+
                 session.Touch();
                 return true;
             }

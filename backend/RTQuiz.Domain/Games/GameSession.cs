@@ -4,6 +4,7 @@ public enum GamePhase
 {
     Lobby = 0,
     InProgress = 1,
+    Finished = 2
 }
 
 public sealed class GameSession
@@ -147,7 +148,10 @@ public sealed class GameSession
 
         var nextIndex = CurrentQuestionIndex + 1;
         if (nextIndex >= totalQuestions)
-            throw new InvalidOperationException("No more questions.");
+        {
+            FinishGame();
+            return;
+        }
 
         CurrentQuestionIndex = nextIndex;
         _currentAnswers.Clear();
@@ -163,4 +167,17 @@ public sealed class GameSession
         return nowUtc - QuestionOpenedAtUtc.Value >= TimeSpan.FromSeconds(QuestionDurationSeconds);
     }
 
+    public void FinishGame()
+    {
+        if (Phase == GamePhase.Finished)
+            return;
+
+        if (Phase != GamePhase.InProgress)
+            throw new InvalidOperationException("Game not in progress.");
+
+        Phase = GamePhase.Finished;
+        IsQuestionOpen = false;
+        QuestionOpenedAtUtc = null;
+        Touch();
+    }
 }
