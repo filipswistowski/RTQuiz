@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR;
 using RTQuiz.Api.Hubs;
 using RTQuiz.Application.Games;
 using RTQuiz.Domain.Games;
@@ -44,6 +44,8 @@ public sealed class QuestionTimerService : BackgroundService
                 // Copy everything needed for async work outside the lock
                 Question? revealedQuestion = null;
                 bool gameFinished = false;
+                QuestionRevealedPayload? revealPayload = null;
+                List<ScoreboardEntry>? finalScores = null;
 
                 lock (session)
                 {
@@ -58,50 +60,76 @@ public sealed class QuestionTimerService : BackgroundService
                     // Close question + score
                     session.RevealAnswerAndScore(revealedQuestion.CorrectIndex);
 
+                    // 1) Prepare payload for Reveal & Scoreboard update while we still hold the lock
+                    var totalPlayers = session.Players.Count;
+                    var totalAnswered = session.CurrentAnswers.Count;
+
+                    var counts = new int[revealedQuestion.Answers.Count];
+                    foreach (var kv in session.CurrentAnswers)
+                    {
+                        var answerIndex = kv.Value;
+                        if (answerIndex >= 0 && answerIndex < counts.Length)
+                            counts[answerIndex]++;
+                    }
+
+                    var percentages = counts
+                        .Select(c => totalAnswered == 0 ? 0.0 : Math.Round((double)c * 100.0 / totalAnswered, 1))
+                        .ToArray();
+
+                    var scoresPayload = session.Players
+                        .Select(p => new ScoreboardEntry(
+                            p.Id,
+                            p.Name,
+                            session.Scores.TryGetValue(p.Id, out var pts) ? pts : 0
+                        ))
+                        .OrderByDescending(x => x.Points)
+                        .ToList();
+
+                    revealPayload = new QuestionRevealedPayload(
+                        session.RoomCode.Value,
+                        totalPlayers,
+                        totalAnswered,
+                        counts,
+                        percentages,
+                        scoresPayload
+                    );
+
                     // Auto-finish if this was the last question
                     if (session.CurrentQuestionIndex >= questions.Count - 1 && session.Phase != GamePhase.Finished)
                     {
                         session.FinishGame();
                         gameFinished = true;
-                    }
 
+                        finalScores = session.Players
+                            .Select(p => new ScoreboardEntry(
+                                p.Id,
+                                p.Name,
+                                session.Scores.TryGetValue(p.Id, out var pts) ? pts : 0
+                            ))
+                            .OrderByDescending(x => x.Points)
+                            .ToList();
+                    }
                 }
 
-                // Fire events outside lock (don't block other requests)
-                if (revealedQuestion is not null)
+                // Fire events outside lock (don't block other requests) using pre-built snapshots!
+                if (revealPayload is not null && revealedQuestion is not null)
                 {
-                    _ = FireRevealAndScoreboardAsync(session, revealedQuestion, stoppingToken);
+                    _ = FireRevealAndScoreboardAsync(revealPayload, revealedQuestion, stoppingToken);
 
-                    if (gameFinished)
-                        _ = FireGameFinishedAsync(session, stoppingToken);
+                    if (gameFinished && finalScores is not null)
+                        _ = FireGameFinishedAsync(revealPayload.RoomCode, finalScores, stoppingToken);
                 }
             }
         }
     }
 
-    private async Task FireRevealAndScoreboardAsync(GameSession session, Question q, CancellationToken ct)
+    private async Task FireRevealAndScoreboardAsync(QuestionRevealedPayload payload, Question q, CancellationToken ct)
     {
-        var room = session.RoomCode.Value;
+        var room = payload.RoomCode;
 
         await _hub.Clients
             .Group($"room:{room}")
             .SendAsync("AnswerRevealed", new { questionId = q.Id, correctIndex = q.CorrectIndex }, ct);
-
-        // Answer distribution (shown to all players after reveal)
-        var totalPlayers = session.Players.Count;
-        var totalAnswered = session.CurrentAnswers.Count;
-
-        var counts = new int[q.Answers.Count];
-        foreach (var kv in session.CurrentAnswers)
-        {
-            var answerIndex = kv.Value;
-            if (answerIndex >= 0 && answerIndex < counts.Length)
-                counts[answerIndex]++;
-        }
-
-        var percentages = counts
-            .Select(c => totalAnswered == 0 ? 0.0 : Math.Round((double)c * 100.0 / totalAnswered, 1))
-            .ToArray();
 
         await _hub.Clients
             .Group($"room:{room}")
@@ -109,43 +137,49 @@ public sealed class QuestionTimerService : BackgroundService
             {
                 roomCode = room,
                 questionId = q.Id,
-                totalPlayers,
-                totalAnswered,
-                counts,
-                percentages
+                totalPlayers = payload.TotalPlayers,
+                totalAnswered = payload.TotalAnswered,
+                counts = payload.Counts,
+                percentages = payload.Percentages
             }, ct);
 
-        var scoresPayload = session.Players
-            .Select(p => new
+        var scoreboardPayload = payload.Scores
+            .Select(s => new
             {
-                playerId = p.Id,
-                name = p.Name,
-                points = session.Scores.TryGetValue(p.Id, out var pts) ? pts : 0
+                playerId = s.PlayerId,
+                name = s.Name,
+                points = s.Points
             })
-            .OrderByDescending(x => x.points)
             .ToList();
 
         await _hub.Clients
             .Group($"room:{room}")
-            .SendAsync("ScoreboardUpdated", new { roomCode = room, scores = scoresPayload }, ct);
+            .SendAsync("ScoreboardUpdated", new { roomCode = room, scores = scoreboardPayload }, ct);
     }
 
-    private async Task FireGameFinishedAsync(GameSession session, CancellationToken ct)
+    private async Task FireGameFinishedAsync(string roomCode, List<ScoreboardEntry> finalScores, CancellationToken ct)
     {
-        var room = session.RoomCode.Value;
-
-        var finalScores = session.Players
-            .Select(p => new
+        var scoresPayload = finalScores
+            .Select(s => new
             {
-                playerId = p.Id,
-                name = p.Name,
-                points = session.Scores.TryGetValue(p.Id, out var pts) ? pts : 0
+                playerId = s.PlayerId,
+                name = s.Name,
+                points = s.Points
             })
-            .OrderByDescending(x => x.points)
             .ToList();
 
         await _hub.Clients
-            .Group($"room:{room}")
-            .SendAsync("GameFinished", new { roomCode = room, scores = finalScores }, ct);
+            .Group($"room:{roomCode}")
+            .SendAsync("GameFinished", new { roomCode = roomCode, scores = scoresPayload }, ct);
     }
+
+    private sealed record ScoreboardEntry(string PlayerId, string Name, int Points);
+    private sealed record QuestionRevealedPayload(
+        string RoomCode,
+        int TotalPlayers,
+        int TotalAnswered,
+        int[] Counts,
+        double[] Percentages,
+        List<ScoreboardEntry> Scores
+    );
 }

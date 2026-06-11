@@ -1,5 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using RTQuiz.Api.Contracts;
 using RTQuiz.Api.Games;
 using RTQuiz.Api.Services;
 using RTQuiz.Application.Games;
@@ -21,10 +22,14 @@ public sealed class GameHub : Hub
         await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
         await Clients.Caller.SendAsync("JoinedRoom", code.Value);
 
-        if (!store.TryGet(code, out var session))
+        if (!store.TryGet(code, out var session) || session is null)
             return;
 
-        var snapshot = GameStateSyncBuilder.Build(session, questionBank, presence);
+        GameStateSync snapshot;
+        lock (session)
+        {
+            snapshot = GameStateSyncBuilder.Build(session, questionBank, presence);
+        }
 
         // StateSync is a "snapshot" event meant for (re)initializing the client's state after reconnect/refresh.
         // It includes ServerNowUtcMs + QuestionEndsInMs so the frontend can compensate for network latency and

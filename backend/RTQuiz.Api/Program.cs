@@ -4,6 +4,7 @@ using RTQuiz.Api.Services;
 using RTQuiz.Application.Games;
 using RTQuiz.Application.Games.CreateGame;
 using RTQuiz.Infrastructure.Games;
+using System.Globalization;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,19 +20,35 @@ builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            // standardowy header Retry-After
+            context.HttpContext.Response.Headers.RetryAfter =
+                ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+        }
+
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.ContentType = "application/json";
+
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            error = "Rate limit exceeded.",
+            message = "Too many answers submitted too quickly. Please slow down."
+        }, cancellationToken);
+    };
+
     options.AddPolicy("AnswerPerPlayerPerRoom", httpContext =>
     {
-        // roomCode bierzemy z routingu: /api/games/{roomCode}/answer
         var roomCode = httpContext.Request.RouteValues.TryGetValue("roomCode", out var rv)
             ? rv?.ToString()
             : null;
 
-        // playerId z headera, bo u Ciebie tak dzia³a autoryzacja gracza
         var playerId = httpContext.Request.Headers.TryGetValue("X-Player-Id", out var pv)
             ? pv.ToString()
             : null;
 
-        // Jeœli nie mamy klucza, to fallback, ¿eby limiter nadal dzia³a³ (np. boty bez headerów).
         var key = (!string.IsNullOrWhiteSpace(roomCode) && !string.IsNullOrWhiteSpace(playerId))
             ? $"{roomCode}:{playerId}"
             : $"fallback:{httpContext.Connection.RemoteIpAddress}";
@@ -46,11 +63,26 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0
             });
     });
+
+    options.AddPolicy("HubConnectPerIp", httpContext =>
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ip,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = 10,
+                Window = TimeSpan.FromSeconds(10),
+                QueueLimit = 0
+            });
+    });
 });
+
 
 builder.Services.AddSingleton<IRoomCodeGenerator, RoomCodeGenerator>();
 builder.Services.AddTransient<CreateGameService>();
-builder.Services.AddSingleton<IRoomCodeGenerator, RoomCodeGenerator>();
 builder.Services.AddSingleton<IQuestionBank, JsonQuestionBank>();
 builder.Services.AddHostedService<QuestionTimerService>();
 builder.Services.AddHostedService<SessionCleanupService>();
@@ -58,10 +90,6 @@ builder.Services.AddSingleton<InMemoryGameSessionStore>();
 builder.Services.AddSingleton<IGameSessionStore>(sp => sp.GetRequiredService<InMemoryGameSessionStore>());
 builder.Services.AddSingleton<InMemoryPresenceStore>();
 
-
-builder.Services
-    .AddOptions<SessionCleanupOptions>()
-    .BindConfiguration(SessionCleanupOptions.SectionName);
 
 builder.Services
     .AddOptions<SessionCleanupOptions>()
@@ -104,6 +132,7 @@ app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapHub<GameHub>("/hubs/game");
+app.MapHub<GameHub>("/hubs/game")
+   .RequireRateLimiting("HubConnectPerIp");
 
 app.Run();

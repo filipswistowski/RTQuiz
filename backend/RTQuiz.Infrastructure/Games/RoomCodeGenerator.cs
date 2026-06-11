@@ -1,4 +1,4 @@
-﻿using RTQuiz.Application.Games;
+using RTQuiz.Application.Games;
 using RTQuiz.Domain.Games;
 using System.Security.Cryptography;
 
@@ -10,9 +10,6 @@ public sealed class RoomCodeGenerator : IRoomCodeGenerator
 
     public RoomCode Generate()
     {
-        Span<byte> bytes = stackalloc byte[RoomCode.Length];
-        RandomNumberGenerator.Fill(bytes);
-
         Span<char> chars = stackalloc char[RoomCode.Length];
         for (var i = 0; i < chars.Length; i++)
         {

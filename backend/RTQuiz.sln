@@ -16,6 +16,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		signalr-client.js = signalr-client.js
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RTQuiz.Tests", "RTQuiz.Tests\RTQuiz.Tests.csproj", "{8AC516E6-6AA2-41AF-AF8C-D6980814FF4A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -74,6 +76,18 @@ Global
 		{B1DA229C-E720-4C08-9E61-A95CF337A19B}.Release|x64.Build.0 = Release|Any CPU
 		{B1DA229C-E720-4C08-9E61-A95CF337A19B}.Release|x86.ActiveCfg = Release|Any CPU
 		{B1DA229C-E720-4C08-9E61-A95CF337A19B}.Release|x86.Build.0 = Release|Any CPU
+		{8AC516E6-6AA2-41AF-AF8C-D6980814FF4A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8AC516E6-6AA2-41AF-AF8C-D6980814FF4A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8AC516E6-6AA2-41AF-AF8C-D6980814FF4A}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{8AC516E6-6AA2-41AF-AF8C-D6980814FF4A}.Debug|x64.Build.0 = Debug|Any CPU
+		{8AC516E6-6AA2-41AF-AF8C-D6980814FF4A}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{8AC516E6-6AA2-41AF-AF8C-D6980814FF4A}.Debug|x86.Build.0 = Debug|Any CPU
+		{8AC516E6-6AA2-41AF-AF8C-D6980814FF4A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8AC516E6-6AA2-41AF-AF8C-D6980814FF4A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8AC516E6-6AA2-41AF-AF8C-D6980814FF4A}.Release|x64.ActiveCfg = Release|Any CPU
+		{8AC516E6-6AA2-41AF-AF8C-D6980814FF4A}.Release|x64.Build.0 = Release|Any CPU
+		{8AC516E6-6AA2-41AF-AF8C-D6980814FF4A}.Release|x86.ActiveCfg = Release|Any CPU
+		{8AC516E6-6AA2-41AF-AF8C-D6980814FF4A}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
