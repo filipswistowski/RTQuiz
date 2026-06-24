@@ -37,6 +37,10 @@ export const scores = ref<ScoreEntry[]>([]);
 export const hasCpuBot = ref(false);
 export const cpuPlayerId = ref('');
 
+// Question progress
+export const questionIndex = ref(0);
+export const totalQuestions = ref(0);
+
 // Local timer for question countdown
 export const remainingSeconds = ref(0);
 let countdownInterval: any = null;
@@ -78,5 +82,7 @@ export function resetGameState() {
   scores.value = [];
   hasCpuBot.value = false;
   cpuPlayerId.value = '';
+  questionIndex.value = 0;
+  totalQuestions.value = 0;
   stopCountdown();
 }

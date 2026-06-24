@@ -1,4 +1,4 @@
-﻿using RTQuiz.Api.Contracts;
+using RTQuiz.Api.Contracts;
 using RTQuiz.Api.Services;
 using RTQuiz.Application.Games;
 using RTQuiz.Domain.Games;
@@ -55,6 +55,9 @@ public static class GameStateSyncBuilder
 
         var onlinePlayerIds = presence.GetOnlinePlayerIds(session.RoomCode.Value).ToList();
 
+        int questionIndex = session.CurrentQuestionIndex;
+        int totalQuestions = questionBank.GetAll().Count;
+
         return new GameStateSync(
             session.RoomCode.Value,
             session.Phase.ToString(),
@@ -64,7 +67,9 @@ public static class GameStateSyncBuilder
             onlinePlayerIds,
             players,
             currentQuestion,
-            scores
+            scores,
+            questionIndex,
+            totalQuestions
         );
     }
 }

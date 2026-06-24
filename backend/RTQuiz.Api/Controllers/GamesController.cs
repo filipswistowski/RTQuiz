@@ -152,7 +152,9 @@ public class GamesController : ControllerBase
                 {
                     questionId = q.Id,
                     text = q.Text,
-                    answers = q.Answers
+                    answers = q.Answers,
+                    questionIndex = currentQuestionIndex,
+                    totalQuestions = questions.Count
                 });
         }
 
@@ -373,7 +375,9 @@ public class GamesController : ControllerBase
             {
                 questionId = q.Id,
                 text = q.Text,
-                answers = q.Answers
+                answers = q.Answers,
+                questionIndex = currentQuestionIndex,
+                totalQuestions = questions.Count
             });
 
         return Ok(new NextResponse(code.Value));

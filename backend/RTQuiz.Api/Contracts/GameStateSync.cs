@@ -1,4 +1,4 @@
-﻿namespace RTQuiz.Api.Contracts;
+namespace RTQuiz.Api.Contracts;
 
 public sealed record GameStateSync(
     string RoomCode,
@@ -9,7 +9,9 @@ public sealed record GameStateSync(
     List<string> OnlinePlayerIds,
     List<GameStatePlayerDto> Players,
     GameStateQuestionDto? CurrentQuestion,
-    List<GameStateScoreDto> Scores
+    List<GameStateScoreDto> Scores,
+    int QuestionIndex,
+    int TotalQuestions
 );
 
 public sealed record GameStatePlayerDto(string Id, string Name);

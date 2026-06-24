@@ -17,6 +17,8 @@ const percentages = store.percentages;
 const scores = store.scores;
 const remainingSeconds = store.remainingSeconds;
 const cpuPlayerId = store.cpuPlayerId;
+const questionIndex = store.questionIndex;
+const totalQuestions = store.totalQuestions;
 
 const errorMsg = ref('');
 const isSubmitting = ref(false);
@@ -26,9 +28,9 @@ const isPlayerOnline = (pid: string) => {
   return onlinePlayerIds.value.includes(pid);
 };
 
-// Filter out the CPU bot from the lobby list
+// Include the CPU bot in the lobby list
 const activePlayers = computed(() => {
-  return players.value.filter(p => p.id !== cpuPlayerId.value);
+  return players.value;
 });
 
 // Find current player's rank and score
@@ -152,7 +154,7 @@ function getAnswerClass(idx: number) {
           v-for="p in activePlayers"
           :key="p.id"
           class="list-item"
-          :class="{ online: isPlayerOnline(p.id) }"
+          :class="{ online: isPlayerOnline(p.id) || p.id === cpuPlayerId }"
         >
           <div class="player-info">
             <span class="player-avatar">{{ p.name.charAt(0).toUpperCase() }}</span>
@@ -160,7 +162,7 @@ function getAnswerClass(idx: number) {
             <span v-if="isHost && p.id === playerId" class="host-chip">HOST</span>
             <span v-if="p.id === cpuPlayerId" class="bot-chip">BOT</span>
           </div>
-          <span class="badge">{{ isPlayerOnline(p.id) ? '🟢 Ready' : '⚫ Offline' }}</span>
+          <span class="badge">{{ (isPlayerOnline(p.id) || p.id === cpuPlayerId) ? '🟢 Ready' : '⚫ Offline' }}</span>
         </div>
       </div>
 
@@ -338,7 +340,7 @@ function getAnswerClass(idx: number) {
               @click="handleNext"
               class="btn btn-primary host-action-btn"
             >
-              Next Question →
+              {{ questionIndex + 1 >= totalQuestions ? 'See Final Results 🏆' : 'Next Question →' }}
             </button>
             <span v-if="isQuestionOpen" class="host-hint">Auto-reveals in {{ remainingSeconds }}s</span>
           </div>

@@ -43,12 +43,14 @@ export async function connectHub(roomCode: string, playerId: string): Promise<vo
     store.counts.value = [];
   });
 
-  connection.on('QuestionPresented', (payload: { questionId: string; text: string; answers: string[] }) => {
+  connection.on('QuestionPresented', (payload: { questionId: string; text: string; answers: string[]; questionIndex?: number; totalQuestions?: number }) => {
     store.currentQuestion.value = {
       id: payload.questionId,
       text: payload.text,
       answers: payload.answers
     };
+    store.questionIndex.value = payload.questionIndex ?? 0;
+    store.totalQuestions.value = payload.totalQuestions ?? 0;
     store.isQuestionOpen.value = true;
     store.answered.value = false;
     store.correctAnswerIndex.value = null;
@@ -110,6 +112,8 @@ export async function connectHub(roomCode: string, playerId: string): Promise<vo
     store.phase.value = payload.phase as any;
     store.isQuestionOpen.value = payload.isQuestionOpen;
     store.onlinePlayerIds.value = payload.onlinePlayerIds;
+    store.questionIndex.value = payload.questionIndex ?? 0;
+    store.totalQuestions.value = payload.totalQuestions ?? 0;
     
     store.players.value = payload.players.map((p: any) => ({ id: p.id, name: p.name }));
     store.scores.value = payload.scores.map((s: any) => ({ playerId: s.playerId, name: s.name, points: s.points }));
