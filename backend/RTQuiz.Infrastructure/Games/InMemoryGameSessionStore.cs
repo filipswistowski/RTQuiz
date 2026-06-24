@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using RTQuiz.Application.Games;
 using RTQuiz.Domain.Games;
 
@@ -45,13 +45,13 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
         }
     }
 
-    public bool TryGet(RoomCode roomCode, out GameSession session)
-    => _sessions.TryGetValue(roomCode.Value, out session!);
+    public bool TryGet(RoomCode roomCode, out GameSession? session)
+    => _sessions.TryGetValue(roomCode.Value, out session);
 
-    public bool TryStart(RoomCode roomCode, string playerId, out GameSession session, out string error)
+    public bool TryStart(RoomCode roomCode, string playerId, out GameSession? session, out string error)
     {
         error = "";
-        session = default!;
+        session = null;
 
         if (!_sessions.TryGetValue(roomCode.Value, out session))
         {
@@ -75,10 +75,10 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
         }
     }
 
-    public bool TrySubmitAnswer(RoomCode roomCode, string playerId, int answerIndex, int answersCount, out GameSession session, out string error)
+    public bool TrySubmitAnswer(RoomCode roomCode, string playerId, int answerIndex, int answersCount, out GameSession? session, out string error)
     {
         error = "";
-        session = default!;
+        session = null;
 
         if (!_sessions.TryGetValue(roomCode.Value, out session))
         {
@@ -102,10 +102,10 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
         }
     }
 
-    public bool TryReveal(RoomCode roomCode, string playerId, int correctIndex, out GameSession session, out string error)
+    public bool TryReveal(RoomCode roomCode, string playerId, int correctIndex, out GameSession? session, out string error)
     {
         error = "";
-        session = default!;
+        session = null;
 
         if (!_sessions.TryGetValue(roomCode.Value, out session))
         {
@@ -136,10 +136,10 @@ public sealed class InMemoryGameSessionStore : IGameSessionStore
         }
     }
 
-    public bool TryNext(RoomCode roomCode, string playerId, int totalQuestions, out GameSession session, out string error)
+    public bool TryNext(RoomCode roomCode, string playerId, int totalQuestions, out GameSession? session, out string error)
     {
         error = "";
-        session = default!;
+        session = null;
 
         if (!_sessions.TryGetValue(roomCode.Value, out session))
         {

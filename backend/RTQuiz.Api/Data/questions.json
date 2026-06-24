@@ -1,14 +1,32 @@
-﻿[
+[
   {
     "id": "q1",
-    "text": "Ile to jest 2+2?",
-    "answers": [ "3", "4", "5", "22" ],
-    "correctIndex": 1
+    "text": "Which is the largest ocean on Earth?",
+    "answers": ["Atlantic", "Indian", "Pacific", "Arctic"],
+    "correctIndex": 2
   },
   {
     "id": "q2",
-    "text": "Stolica Polski to:",
-    "answers": [ "Kraków", "Gdańsk", "Warszawa", "Wrocław" ],
+    "text": "Which is the largest land animal on Earth?",
+    "answers": ["Giraffe", "African Elephant", "Hippopotamus", "White Rhinoceros"],
+    "correctIndex": 1
+  },
+  {
+    "id": "q3",
+    "text": "How many sides does a hexagon have?",
+    "answers": ["5", "6", "7", "8"],
+    "correctIndex": 1
+  },
+  {
+    "id": "q4",
+    "text": "What is the tallest mountain in the world?",
+    "answers": ["K2", "Mont Blanc", "Kilimanjaro", "Mount Everest"],
+    "correctIndex": 3
+  },
+  {
+    "id": "q5",
+    "text": "Which planet is known as the Red Planet?",
+    "answers": ["Venus", "Jupiter", "Mars", "Saturn"],
     "correctIndex": 2
   }
 ]

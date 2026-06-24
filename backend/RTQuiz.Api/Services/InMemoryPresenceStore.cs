@@ -1,65 +1,98 @@
-﻿using System.Collections.Concurrent;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace RTQuiz.Api.Services;
 
 public sealed class InMemoryPresenceStore
 {
-    // roomCode -> set(playerId)
-    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _onlineByRoom = new();
+    private readonly object _lock = new();
 
     // connectionId -> (roomCode, playerId)
-    private readonly ConcurrentDictionary<string, (string RoomCode, string PlayerId)> _byConnection = new();
+    private readonly Dictionary<string, (string RoomCode, string PlayerId)> _byConnection = new();
+
+    // roomCode -> Set of playerIds that have at least one connection
+    private readonly Dictionary<string, HashSet<string>> _onlineByRoom = new();
 
     public void Identify(string connectionId, string roomCode, string playerId)
     {
-        // if this connection was already identified, remove old mapping first
-        if (_byConnection.TryGetValue(connectionId, out var prev))
+        lock (_lock)
         {
-            Remove(connectionId, prev.RoomCode, prev.PlayerId);
+            // If this connection was already identified, remove old mapping first
+            if (_byConnection.TryGetValue(connectionId, out var prev))
+            {
+                RemoveInternal(connectionId, prev.RoomCode, prev.PlayerId);
+            }
+
+            _byConnection[connectionId] = (roomCode, playerId);
+
+            if (!_onlineByRoom.TryGetValue(roomCode, out var players))
+            {
+                players = new HashSet<string>();
+                _onlineByRoom[roomCode] = players;
+            }
+            players.Add(playerId);
         }
-
-        _byConnection[connectionId] = (roomCode, playerId);
-
-        var set = _onlineByRoom.GetOrAdd(roomCode, _ => new ConcurrentDictionary<string, byte>());
-        set[playerId] = 0;
     }
 
     public void RemoveByConnection(string connectionId)
     {
-        if (_byConnection.TryRemove(connectionId, out var map))
+        lock (_lock)
         {
-            Remove(connectionId, map.RoomCode, map.PlayerId);
+            if (_byConnection.Remove(connectionId, out var map))
+            {
+                RemoveInternal(connectionId, map.RoomCode, map.PlayerId);
+            }
         }
     }
 
-    private void Remove(string connectionId, string roomCode, string playerId)
+    private void RemoveInternal(string connectionId, string roomCode, string playerId)
     {
-        if (_onlineByRoom.TryGetValue(roomCode, out var set))
+        // A player is only offline if no other connection maps to the same player
+        var hasOtherConnections = false;
+        foreach (var kvp in _byConnection)
         {
-            set.TryRemove(playerId, out _);
-
-            if (set.IsEmpty)
+            if (kvp.Key != connectionId && kvp.Value.RoomCode == roomCode && kvp.Value.PlayerId == playerId)
             {
-                _onlineByRoom.TryRemove(roomCode, out _);
+                hasOtherConnections = true;
+                break;
+            }
+        }
+
+        if (!hasOtherConnections)
+        {
+            if (_onlineByRoom.TryGetValue(roomCode, out var players))
+            {
+                players.Remove(playerId);
+                if (players.Count == 0)
+                {
+                    _onlineByRoom.Remove(roomCode);
+                }
             }
         }
     }
 
     public IReadOnlyList<string> GetOnlinePlayerIds(string roomCode)
     {
-        if (!_onlineByRoom.TryGetValue(roomCode, out var set))
-            return Array.Empty<string>();
+        lock (_lock)
+        {
+            if (!_onlineByRoom.TryGetValue(roomCode, out var players))
+                return Array.Empty<string>();
 
-        return set.Keys.OrderBy(x => x).ToList();
+            return players.OrderBy(x => x).ToList();
+        }
     }
 
     public bool TryGetRoomForConnection(string connectionId, out string roomCode)
     {
-        roomCode = "";
-        if (!_byConnection.TryGetValue(connectionId, out var map))
-            return false;
+        lock (_lock)
+        {
+            roomCode = "";
+            if (!_byConnection.TryGetValue(connectionId, out var map))
+                return false;
 
-        roomCode = map.RoomCode;
-        return true;
+            roomCode = map.RoomCode;
+            return true;
+        }
     }
 }
