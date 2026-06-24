@@ -33,6 +33,10 @@ export const percentages = ref<number[]>([]);
 export const counts = ref<number[]>([]);
 export const scores = ref<ScoreEntry[]>([]);
 
+// CPU bot state
+export const hasCpuBot = ref(false);
+export const cpuPlayerId = ref('');
+
 // Local timer for question countdown
 export const remainingSeconds = ref(0);
 let countdownInterval: any = null;
@@ -72,5 +76,7 @@ export function resetGameState() {
   percentages.value = [];
   counts.value = [];
   scores.value = [];
+  hasCpuBot.value = false;
+  cpuPlayerId.value = '';
   stopCountdown();
 }

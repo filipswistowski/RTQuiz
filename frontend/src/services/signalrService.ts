@@ -1,5 +1,6 @@
 import * as signalR from '@microsoft/signalr';
 import * as store from '../store/gameStore';
+import { submitAnswer } from './gameService';
 
 const BASE_URL = 'http://localhost:5104';
 let connection: signalR.HubConnection | null = null;
@@ -54,6 +55,21 @@ export async function connectHub(roomCode: string, playerId: string): Promise<vo
     store.percentages.value = [];
     store.counts.value = [];
     store.startCountdown(15000);
+
+    // CPU Bot: auto-submit a random answer after a human-like delay
+    if (store.hasCpuBot.value && store.cpuPlayerId.value && store.roomCode.value) {
+      const delay = 1500 + Math.random() * 2500; // 1.5 - 4 seconds
+      const answerCount = payload.answers.length;
+      // Bot is slightly biased toward correct answers to make it interesting
+      // but we don't know the correct index client-side, so just pick randomly
+      const randomIndex = Math.floor(Math.random() * answerCount);
+      setTimeout(() => {
+        if (store.isQuestionOpen.value) {
+          submitAnswer(store.roomCode.value, store.cpuPlayerId.value, randomIndex)
+            .catch(err => console.warn('CPU bot answer failed:', err));
+        }
+      }, delay);
+    }
   });
 
   connection.on('AnswerSubmitted', (payload: { playerId: string }) => {

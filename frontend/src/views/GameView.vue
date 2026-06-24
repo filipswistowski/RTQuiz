@@ -14,23 +14,21 @@ const isQuestionOpen = store.isQuestionOpen;
 const answered = store.answered;
 const correctAnswerIndex = store.correctAnswerIndex;
 const percentages = store.percentages;
-const counts = store.counts;
 const scores = store.scores;
 const remainingSeconds = store.remainingSeconds;
+const cpuPlayerId = store.cpuPlayerId;
 
 const errorMsg = ref('');
 const isSubmitting = ref(false);
+const selectedIndex = ref<number | null>(null);
 
 const isPlayerOnline = (pid: string) => {
-  // Host is always online
-  const p = players.value.find(x => x.id === pid);
-  if (p && p.name === 'Host') return true;
   return onlinePlayerIds.value.includes(pid);
 };
 
-// Filter out the Host from the lobby list (just show actual players)
+// Filter out the CPU bot from the lobby list
 const activePlayers = computed(() => {
-  return players.value.filter(p => p.name !== 'Host');
+  return players.value.filter(p => p.id !== cpuPlayerId.value);
 });
 
 // Find current player's rank and score
@@ -44,15 +42,14 @@ const myScoreInfo = computed(() => {
   };
 });
 
-// Map index to color gradients
+// Map index to color gradients & symbols
 const optionStyles = [
-  'var(--opt-red)',
-  'var(--opt-blue)',
-  'var(--opt-green)',
-  'var(--opt-yellow)',
-  'var(--opt-purple)'
+  'linear-gradient(135deg, #ff416c, #ff4b2b)',
+  'linear-gradient(135deg, #1e3c72, #2a5298)',
+  'linear-gradient(135deg, #11998e, #38ef7d)',
+  'linear-gradient(135deg, #f857a6, #ff5858)',
+  'linear-gradient(135deg, #7F00FF, #E100FF)'
 ];
-
 const optionSymbols = ['▲', '◆', '●', '■', '★'];
 
 async function handleStart() {
@@ -65,15 +62,17 @@ async function handleStart() {
 }
 
 async function handleAnswerSelect(index: number) {
-  if (answered.value || !isQuestionOpen.value || isHost.value) return;
-  
+  if (answered.value || !isQuestionOpen.value || isSubmitting.value) return;
+
   errorMsg.value = '';
   isSubmitting.value = true;
+  selectedIndex.value = index;
   try {
     await submitAnswer(roomCode.value, playerId.value, index);
     store.answered.value = true;
   } catch (err: any) {
     errorMsg.value = err.message || 'Failed to submit answer.';
+    selectedIndex.value = null;
   } finally {
     isSubmitting.value = false;
   }
@@ -90,6 +89,7 @@ async function handleReveal() {
 
 async function handleNext() {
   errorMsg.value = '';
+  selectedIndex.value = null;
   try {
     await nextQuestion(roomCode.value, playerId.value);
   } catch (err: any) {
@@ -101,6 +101,16 @@ async function handleExit() {
   await disconnectHub();
   store.resetGameState();
 }
+
+function getAnswerClass(idx: number) {
+  if (correctAnswerIndex.value === null) {
+    if (answered.value && selectedIndex.value === idx) return 'selected';
+    return '';
+  }
+  if (idx === correctAnswerIndex.value) return 'correct';
+  if (selectedIndex.value === idx && idx !== correctAnswerIndex.value) return 'wrong';
+  return 'dimmed';
+}
 </script>
 
 <template>
@@ -108,50 +118,59 @@ async function handleExit() {
     <!-- TOP BAR -->
     <div class="game-top-bar glass-panel">
       <div class="room-details">
-        <span class="label">ROOM:</span>
+        <span class="label">ROOM</span>
         <span class="value code">{{ roomCode }}</span>
       </div>
 
-      <!-- TIMER DISPLAY -->
+      <!-- TIMER -->
       <div v-if="currentQuestion && isQuestionOpen" class="timer-box" :class="{ warning: remainingSeconds <= 5 }">
         <span class="timer-num">{{ remainingSeconds }}</span>
         <span class="timer-lbl">sec</span>
       </div>
+      <div v-else class="timer-placeholder"></div>
 
       <div class="player-count">
-        <span class="label">ONLINE:</span>
+        <span class="label">ONLINE</span>
         <span class="value">{{ onlinePlayerIds.length }}</span>
       </div>
     </div>
 
-    <!-- 1. LOBBY PHASE -->
+    <!-- ══════════════════════════════════════════════════════
+         1. LOBBY PHASE
+    ═══════════════════════════════════════════════════════ -->
     <div v-if="store.phase.value === 'Lobby'" class="lobby-screen glass-panel pulse-card">
-      <h2 class="view-title">Waiting Lobby</h2>
-      <p class="subtitle">Share the room code with players to join.</p>
+      <div class="lobby-header">
+        <h2 class="view-title">Waiting Lobby</h2>
+        <p class="subtitle">Share the room code with players to join.</p>
+      </div>
 
       <div class="players-list">
         <div v-if="activePlayers.length === 0" class="empty-state">
           No players connected yet...
         </div>
-        <div 
-          v-for="p in activePlayers" 
-          :key="p.id" 
-          class="list-item" 
+        <div
+          v-for="p in activePlayers"
+          :key="p.id"
+          class="list-item"
           :class="{ online: isPlayerOnline(p.id) }"
         >
-          <span class="player-name">{{ p.name }}</span>
-          <span class="badge">{{ isPlayerOnline(p.id) ? 'Ready' : 'Offline' }}</span>
+          <div class="player-info">
+            <span class="player-avatar">{{ p.name.charAt(0).toUpperCase() }}</span>
+            <span class="player-name">{{ p.name }}</span>
+            <span v-if="isHost && p.id === playerId" class="host-chip">HOST</span>
+            <span v-if="p.id === cpuPlayerId" class="bot-chip">BOT</span>
+          </div>
+          <span class="badge">{{ isPlayerOnline(p.id) ? '🟢 Ready' : '⚫ Offline' }}</span>
         </div>
       </div>
 
-      <!-- HOST CONTROLS -->
       <div v-if="isHost" class="host-controls">
-        <button 
-          @click="handleStart" 
-          class="btn btn-primary start-btn" 
+        <button
+          @click="handleStart"
+          class="btn btn-primary start-btn"
           :disabled="activePlayers.length === 0"
         >
-          Start Quiz
+          ▶ Start Quiz
         </button>
         <p v-if="activePlayers.length === 0" class="control-help">Need at least 1 player to start.</p>
       </div>
@@ -161,155 +180,124 @@ async function handleExit() {
       </div>
     </div>
 
-    <!-- 2. GAMEPLAY / QUESTION PRESENTATION -->
+    <!-- ══════════════════════════════════════════════════════
+         2. IN-PROGRESS / QUESTION PHASE
+    ═══════════════════════════════════════════════════════ -->
     <div v-else-if="store.phase.value === 'InProgress' && currentQuestion" class="game-screen">
-      <!-- QUESTION HEADER -->
+
+      <!-- QUESTION CARD -->
       <div class="glass-panel question-card">
         <h2 class="question-text">{{ currentQuestion.text }}</h2>
       </div>
 
-      <!-- HOST/PRESENTER PRE-REVEAL STATE -->
-      <div v-if="isHost && correctAnswerIndex === null" class="host-presenter-panel glass-panel">
-        <div class="info-row">
-          <p>The question is currently open. Waiting for players to submit answers...</p>
-        </div>
-        <div class="answers-grid-preview">
-          <div 
-            v-for="(ans, idx) in currentQuestion.answers" 
-            :key="idx" 
-            class="answer-preview-card"
-            :style="{ background: optionStyles[idx % optionStyles.length] }"
-          >
-            <span class="symbol">{{ optionSymbols[idx % optionSymbols.length] }}</span>
-            <span class="text">{{ ans }}</span>
-          </div>
-        </div>
-        <button @click="handleReveal" class="btn btn-primary reveal-btn">
-          Reveal Answers Now
-        </button>
-      </div>
-
-      <!-- GUEST / PLAYER ANSWER BUTTONS -->
-      <div v-else-if="!isHost && correctAnswerIndex === null" class="player-answering-panel">
+      <!-- ANSWER BUTTONS — shown to everyone (host + guests) when question is open -->
+      <div v-if="correctAnswerIndex === null" class="player-answering-panel">
         <div v-if="!answered" class="answers-grid">
-          <button 
-            v-for="(ans, idx) in currentQuestion.answers" 
+          <button
+            v-for="(ans, idx) in currentQuestion.answers"
             :key="idx"
             class="answer-btn"
+            :class="getAnswerClass(idx)"
             :style="{ background: optionStyles[idx % optionStyles.length] }"
             :disabled="isSubmitting"
             @click="handleAnswerSelect(idx)"
           >
-            <span class="symbol">{{ optionSymbols[idx % optionSymbols.length] }}</span>
-            <span class="text">{{ ans }}</span>
+            <span class="symbol-badge">{{ optionSymbols[idx % optionSymbols.length] }}</span>
+            <span class="ans-text">{{ ans }}</span>
           </button>
         </div>
+
+        <!-- Already answered — waiting state -->
         <div v-else class="glass-panel answered-waiting">
           <div class="success-checkmark">✔</div>
-          <h3>Answer Submitted!</h3>
-          <p>Waiting for the host to reveal the results...</p>
+          <h3>Answer Locked In!</h3>
+          <p>Waiting for results...</p>
+          <div v-if="isHost" class="host-inline-hint">
+            You're the host — use the controls below to reveal answers early.
+          </div>
         </div>
       </div>
 
-      <!-- POST-REVEAL / SCOREBOARD STATE -->
-      <div v-else-if="correctAnswerIndex !== null" class="stats-reveal-screen">
-        <div class="feedback-banner" v-if="!isHost" :class="{ correct: answered && myScoreInfo.rank > 0 }">
-          <h3>
-            {{ myScoreInfo.rank > 0 ? 'Correct Answer!' : 'Time Up / Incorrect' }}
-          </h3>
-        </div>
-
-        <div class="stats-grid">
-          <!-- Answer percentages -->
-          <div class="glass-panel stats-panel">
-            <h3 class="panel-subtitle">Answers Distribution</h3>
-            <div class="percentages-list">
-              <div 
-                v-for="(ans, idx) in currentQuestion.answers" 
-                :key="idx"
-                class="stat-bar-container"
-              >
-                <div class="stat-info">
-                  <span class="ans-name">{{ ans }}</span>
-                  <span class="ans-percent">{{ percentages[idx] || 0 }}% ({{ counts[idx] || 0 }})</span>
-                </div>
-                <div class="progress-track">
-                  <div 
-                    class="progress-fill" 
-                    :style="{ 
-                      width: `${percentages[idx] || 0}%`, 
-                      background: idx === correctAnswerIndex ? 'linear-gradient(135deg, #11998e, #38ef7d)' : 'rgba(255,255,255,0.1)'
-                    }"
-                  ></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Current Scoreboard -->
-          <div class="glass-panel scores-panel">
-            <h3 class="panel-subtitle">Scoreboard</h3>
-            <div class="mini-scores">
-              <div v-for="(s, index) in scores" :key="s.playerId" class="list-item">
-                <span class="name">
-                  <span class="rank-num">#{{ index + 1 }}</span> {{ s.name }}
-                </span>
-                <span class="badge">{{ s.points }} pts</span>
-              </div>
-            </div>
+      <!-- POST-REVEAL — answer stats -->
+      <div v-else class="stats-reveal-screen">
+        <div class="feedback-banner glass-panel"
+          :class="answered && selectedIndex === correctAnswerIndex ? 'correct' : 'neutral'">
+          <span class="feedback-icon">{{ answered && selectedIndex === correctAnswerIndex ? '🎉' : '😅' }}</span>
+          <div>
+            <h3 class="feedback-title">
+              {{ answered && selectedIndex === correctAnswerIndex ? 'Correct!' : 'Nice try!' }}
+            </h3>
+            <p class="feedback-sub">
+              You are ranked <strong>#{{ myScoreInfo.rank }}</strong> with <strong>{{ myScoreInfo.points }}</strong> points.
+            </p>
           </div>
         </div>
 
-        <!-- HOST CONTROLS FOR NEXT -->
-        <div v-if="isHost" class="host-controls">
-          <button @click="handleNext" class="btn btn-primary start-btn">
-            Next Question
-          </button>
+        <!-- Revealed answer grid (colour-coded, greyed out) -->
+        <div class="answers-grid reveal-grid">
+          <div
+            v-for="(ans, idx) in currentQuestion.answers"
+            :key="idx"
+            class="answer-btn revealed"
+            :class="getAnswerClass(idx)"
+            :style="{ background: optionStyles[idx % optionStyles.length] }"
+          >
+            <span class="symbol-badge">{{ optionSymbols[idx % optionSymbols.length] }}</span>
+            <span class="ans-text">{{ ans }}</span>
+            <span class="ans-pct">{{ percentages[idx] ?? 0 }}%</span>
+          </div>
+        </div>
+
+        <!-- Progress bars -->
+        <div class="glass-panel stats-panel">
+          <h3 class="panel-subtitle">Scoreboard</h3>
+          <div class="mini-scores">
+            <div v-for="(s, index) in scores" :key="s.playerId" class="list-item">
+              <span class="player-name">
+                <span class="rank-num">#{{ index + 1 }}</span>
+                {{ s.name }}
+                <span v-if="s.playerId === cpuPlayerId" style="opacity:0.6;font-size:0.8rem">🤖</span>
+              </span>
+              <span class="badge">{{ s.points }} pts</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- 3. FINISHED / PODIUM VIEW -->
+    <!-- ══════════════════════════════════════════════════════
+         3. FINISHED / PODIUM
+    ═══════════════════════════════════════════════════════ -->
     <div v-else-if="store.phase.value === 'Finished'" class="finished-screen glass-panel">
-      <h2 class="podium-title">Final Podium</h2>
-      <p class="subtitle">Congratulations to the winners!</p>
+      <h2 class="podium-title">Final Podium 🏆</h2>
+      <p class="subtitle">The results are in!</p>
 
-      <!-- Podium visuals -->
       <div class="podium-container">
-        <!-- 2nd Place -->
         <div v-if="scores[1]" class="podium-stand second">
           <div class="crown">🥈</div>
           <span class="player-name">{{ scores[1].name }}</span>
-          <div class="stand-bar">
-            <span class="score">{{ scores[1].points }} pts</span>
-          </div>
+          <div class="stand-bar"><span class="score">{{ scores[1].points }} pts</span></div>
         </div>
-
-        <!-- 1st Place -->
         <div v-if="scores[0]" class="podium-stand first">
           <div class="crown">👑</div>
           <span class="player-name">{{ scores[0].name }}</span>
-          <div class="stand-bar">
-            <span class="score">{{ scores[0].points }} pts</span>
-          </div>
+          <div class="stand-bar"><span class="score">{{ scores[0].points }} pts</span></div>
         </div>
-
-        <!-- 3rd Place -->
         <div v-if="scores[2]" class="podium-stand third">
           <div class="crown">🥉</div>
           <span class="player-name">{{ scores[2].name }}</span>
-          <div class="stand-bar">
-            <span class="score">{{ scores[2].points }} pts</span>
-          </div>
+          <div class="stand-bar"><span class="score">{{ scores[2].points }} pts</span></div>
         </div>
       </div>
 
-      <!-- Rest of Scoreboard -->
       <div class="scores-table-container">
-        <h3 class="panel-subtitle">Final Standings</h3>
+        <h3 class="panel-subtitle">Full Standings</h3>
         <div class="full-standings">
           <div v-for="(s, idx) in scores" :key="s.playerId" class="list-item">
-            <span class="player-name">#{{ idx + 1 }} {{ s.name }}</span>
+            <span class="player-name">
+              #{{ idx + 1 }} {{ s.name }}
+              <span v-if="s.playerId === cpuPlayerId" style="opacity:0.6;font-size:0.8rem">🤖</span>
+            </span>
             <span class="badge">{{ s.points }} pts</span>
           </div>
         </div>
@@ -320,9 +308,41 @@ async function handleExit() {
       </button>
     </div>
 
+    <!-- ERROR BANNER -->
     <Transition name="fade">
       <div v-if="errorMsg" class="error-banner">
         <span>⚠️</span> {{ errorMsg }}
+      </div>
+    </Transition>
+
+    <!-- ══════════════════════════════════════════════════════
+         STICKY HOST CONTROLS BAR (only for host, in-progress)
+    ═══════════════════════════════════════════════════════ -->
+    <Transition name="slide-up">
+      <div
+        v-if="isHost && store.phase.value === 'InProgress'"
+        class="host-sticky-bar"
+      >
+        <div class="host-sticky-inner">
+          <div class="host-badge">👑 Host Controls</div>
+          <div class="host-actions">
+            <button
+              v-if="isQuestionOpen"
+              @click="handleReveal"
+              class="btn btn-secondary host-action-btn"
+            >
+              Reveal Answers
+            </button>
+            <button
+              v-if="!isQuestionOpen && correctAnswerIndex !== null"
+              @click="handleNext"
+              class="btn btn-primary host-action-btn"
+            >
+              Next Question →
+            </button>
+            <span v-if="isQuestionOpen" class="host-hint">Auto-reveals in {{ remainingSeconds }}s</span>
+          </div>
+        </div>
       </div>
     </Transition>
   </div>
@@ -334,8 +354,12 @@ async function handleExit() {
   flex-direction: column;
   gap: 2rem;
   width: 100%;
+  /* Extra padding-bottom to make room for the sticky host bar */
+  padding-bottom: 100px;
+  box-sizing: border-box;
 }
 
+/* ── TOP BAR ── */
 .game-top-bar {
   display: flex;
   justify-content: space-between;
@@ -346,24 +370,26 @@ async function handleExit() {
 
 .room-details, .player-count {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
 }
 
 .label {
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  color: rgba(255,255,255,0.4);
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.08em;
 }
 
 .value {
-  font-size: 1.125rem;
+  font-size: 1.25rem;
   font-weight: 800;
 }
 
 .value.code {
-  color: var(--accent);
-  letter-spacing: 0.05em;
+  color: #00e5ff;
+  letter-spacing: 0.08em;
 }
 
 .timer-box {
@@ -374,83 +400,106 @@ async function handleExit() {
   display: flex;
   align-items: baseline;
   gap: 0.25rem;
-  transition: all 0.3s;
+  transition: all 0.4s ease;
 }
 
 .timer-box.warning {
-  border-color: rgba(255, 75, 43, 0.5);
-  background: rgba(255, 75, 43, 0.1);
-  box-shadow: 0 0 15px rgba(255, 75, 43, 0.1);
+  border-color: rgba(255, 75, 43, 0.6);
+  background: rgba(255, 75, 43, 0.12);
+  box-shadow: 0 0 20px rgba(255, 75, 43, 0.15);
   color: #ff4b2b;
 }
 
-.timer-num {
-  font-size: 1.75rem;
-  font-weight: 800;
+.timer-placeholder {
+  width: 80px;
 }
 
-.timer-lbl {
-  font-size: 0.75rem;
-  font-weight: 600;
-  opacity: 0.6;
-}
+.timer-num { font-size: 2rem; font-weight: 800; }
+.timer-lbl { font-size: 0.75rem; font-weight: 600; opacity: 0.6; }
 
-.view-title {
-  font-size: 2.25rem;
-  font-weight: 800;
-  margin-top: 0;
-  margin-bottom: 0.5rem;
-}
+/* ── LOBBY ── */
+.lobby-screen { padding: 2.5rem; }
+
+.lobby-header { margin-bottom: 2rem; }
+.view-title { font-size: 2rem; font-weight: 800; margin: 0 0 0.5rem; }
+.subtitle { color: rgba(255,255,255,0.5); margin: 0; }
 
 .players-list {
-  margin: 2rem 0;
-  max-height: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 280px;
   overflow-y: auto;
-  padding-right: 0.5rem;
+  padding-right: 0.25rem;
+  margin-bottom: 2rem;
 }
 
-.empty-state {
-  color: rgba(255,255,255,0.4);
-  font-style: italic;
-  padding: 2rem;
+.player-info { display: flex; align-items: center; gap: 0.75rem; }
+
+.player-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7c4dff, #448aff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  flex-shrink: 0;
 }
 
-.host-controls {
-  margin-top: 2rem;
+.host-chip {
+  background: rgba(124, 77, 255, 0.15);
+  color: #b388ff;
+  border: 1px solid rgba(124, 77, 255, 0.3);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 8px;
+  letter-spacing: 0.05em;
 }
 
-.control-help {
-  font-size: 0.8rem;
-  color: rgba(255,255,255,0.4);
-  margin-top: 0.5rem;
+.bot-chip {
+  background: rgba(0, 229, 255, 0.1);
+  color: #00e5ff;
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 8px;
 }
+
+.empty-state { color: rgba(255,255,255,0.35); font-style: italic; padding: 1.5rem 0; }
+
+.host-controls { display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+.start-btn { min-width: 200px; }
+.control-help { font-size: 0.8rem; color: rgba(255,255,255,0.4); margin: 0; }
 
 .guest-waiting {
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 1rem;
-  padding: 2rem;
-  color: rgba(255,255,255,0.6);
+  color: rgba(255,255,255,0.5);
+  padding: 1rem 0;
 }
 
 .spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid rgba(255, 255, 255, 0.1);
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(255,255,255,0.1);
   border-left-color: var(--primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
+  flex-shrink: 0;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* Gameplay View */
+/* ── QUESTION CARD ── */
 .question-card {
-  border-radius: 20px;
-  padding: 3rem 2rem;
+  padding: 3rem 2.5rem;
+  text-align: left;
 }
 
 .question-text {
@@ -460,62 +509,97 @@ async function handleExit() {
   line-height: 1.3;
 }
 
+/* ── ANSWER GRID ── */
 .answers-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-  margin-top: 2rem;
+  gap: 1.25rem;
 }
 
 .answer-btn {
   border: none;
-  border-radius: 20px;
-  padding: 2rem 2.5rem;
+  border-radius: 18px;
+  padding: 1.75rem 2rem;
   color: white;
-  font-size: 1.5rem;
+  font-size: 1.35rem;
   font-weight: 700;
   font-family: inherit;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 1rem;
   text-align: left;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s, box-shadow 0.2s;
+  position: relative;
+  overflow: hidden;
 }
 
-.answer-btn:hover {
+.answer-btn:hover:not(:disabled) {
   transform: translateY(-4px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
 }
 
-.answer-btn:active {
-  transform: translateY(-1px);
+.answer-btn.selected {
+  outline: 3px solid rgba(255,255,255,0.8);
+  outline-offset: 2px;
 }
 
-.answer-btn .symbol {
-  font-size: 2rem;
-  opacity: 0.8;
+.answer-btn.correct {
+  outline: 3px solid #38ef7d;
+  outline-offset: 2px;
+}
+
+.answer-btn.wrong {
+  opacity: 0.5;
+  filter: grayscale(0.4);
+}
+
+.answer-btn.dimmed {
+  opacity: 0.45;
+}
+
+.answer-btn.revealed {
+  cursor: default;
+  pointer-events: none;
+}
+
+.symbol-badge {
+  font-size: 1.5rem;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.15);
   display: inline-flex;
-  width: 45px;
-  height: 45px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
+.ans-text { flex: 1; }
+
+.ans-pct {
+  font-size: 0.9rem;
+  opacity: 0.8;
+  font-weight: 600;
+  background: rgba(0,0,0,0.2);
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+}
+
+/* ── ANSWERED WAITING ── */
 .answered-waiting {
-  padding: 4rem 2rem;
+  padding: 3rem 2rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
+  text-align: center;
 }
 
 .success-checkmark {
-  width: 60px;
-  height: 60px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   background: rgba(56, 239, 125, 0.1);
   border: 2px solid #38ef7d;
@@ -526,105 +610,54 @@ async function handleExit() {
   justify-content: center;
 }
 
-.answers-grid-preview {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.25rem;
-  margin: 2rem 0;
+.host-inline-hint {
+  font-size: 0.85rem;
+  color: #b388ff;
+  background: rgba(124, 77, 255, 0.08);
+  border: 1px solid rgba(124, 77, 255, 0.2);
+  padding: 0.75rem 1.25rem;
+  border-radius: 10px;
+  margin-top: 0.5rem;
 }
 
-.answer-preview-card {
-  padding: 1.5rem;
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  font-size: 1.125rem;
-  font-weight: 700;
-}
-
-.answer-preview-card .symbol {
-  font-size: 1.5rem;
-}
-
-.host-presenter-panel {
-  padding: 2.5rem;
-}
-
-.reveal-btn {
-  margin-top: 1rem;
-}
-
-/* Post-Reveal Screen */
+/* ── POST-REVEAL ── */
 .stats-reveal-screen {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.5rem;
 }
 
 .feedback-banner {
-  background: rgba(255, 75, 43, 0.1);
-  border: 1px solid rgba(255, 75, 43, 0.2);
-  color: #ff4b2b;
-  padding: 1.5rem;
-  border-radius: 16px;
-}
-
-.feedback-banner.correct {
-  background: rgba(56, 239, 125, 0.1);
-  border-color: rgba(56, 239, 125, 0.2);
-  color: #38ef7d;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  gap: 2rem;
-}
-
-.stats-panel, .scores-panel {
-  text-align: left;
-}
-
-.panel-subtitle {
-  font-size: 1.35rem;
-  font-weight: 700;
-  margin-top: 0;
-  margin-bottom: 1.5rem;
-}
-
-.stat-bar-container {
-  margin-bottom: 1.25rem;
-}
-
-.stat-info {
   display: flex;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
-  font-size: 0.95rem;
-  font-weight: 600;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.5rem 2rem;
+  border-radius: 18px;
 }
 
-.progress-track {
-  height: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid var(--border-color);
-}
+.feedback-banner.correct { border-color: rgba(56, 239, 125, 0.3); }
+.feedback-banner.neutral { border-color: rgba(255,255,255,0.1); }
 
-.progress-fill {
-  height: 100%;
-  border-radius: 6px;
-  transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-}
+.feedback-icon { font-size: 2.5rem; }
+.feedback-title { margin: 0 0 0.25rem; font-size: 1.5rem; font-weight: 800; }
+.feedback-sub { margin: 0; color: rgba(255,255,255,0.6); }
 
-/* Podium View */
+.reveal-grid { margin: 0; }
+
+.stats-panel { padding: 1.75rem; }
+.panel-subtitle { font-size: 1.25rem; font-weight: 700; margin-top: 0; margin-bottom: 1.25rem; }
+
+.mini-scores { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.rank-num { color: rgba(255,255,255,0.4); margin-right: 0.25rem; font-weight: 600; }
+
+/* ── PODIUM ── */
+.finished-screen { padding: 3rem 2.5rem; text-align: center; }
+
 .podium-title {
   font-size: 3rem;
   font-weight: 800;
-  margin-top: 0;
-  margin-bottom: 0.5rem;
+  margin: 0 0 0.5rem;
   background: linear-gradient(135deg, #ffd700, #ff8c00);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -635,32 +668,22 @@ async function handleExit() {
   align-items: flex-end;
   justify-content: center;
   gap: 1rem;
-  margin: 4rem 0;
-  height: 250px;
+  margin: 3rem auto;
+  height: 240px;
 }
 
 .podium-stand {
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 120px;
-  transition: all 0.3s;
+  width: 130px;
 }
 
-.podium-stand .crown {
-  font-size: 2.25rem;
-  margin-bottom: 0.5rem;
-}
-
-.podium-stand .player-name {
-  font-weight: 700;
-  margin-bottom: 0.5rem;
-  text-align: center;
-}
+.podium-stand .crown { font-size: 2rem; margin-bottom: 0.4rem; }
+.podium-stand .player-name { font-weight: 700; margin-bottom: 0.5rem; font-size: 0.9rem; }
 
 .stand-bar {
   width: 100%;
-  background: linear-gradient(to top, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.1) 100%);
   border: 1px solid var(--border-color);
   border-bottom: none;
   border-radius: 8px 8px 0 0;
@@ -671,37 +694,81 @@ async function handleExit() {
 }
 
 .podium-stand.first .stand-bar {
-  height: 180px;
-  background: linear-gradient(to top, rgba(255, 215, 0, 0.05) 0%, rgba(255, 215, 0, 0.25) 100%);
-  border-color: rgba(255, 215, 0, 0.3);
+  height: 170px;
+  background: linear-gradient(to top, rgba(255,215,0,0.04), rgba(255,215,0,0.22));
+  border-color: rgba(255,215,0,0.3);
 }
 
 .podium-stand.second .stand-bar {
-  height: 120px;
-  background: linear-gradient(to top, rgba(192, 192, 192, 0.05) 0%, rgba(192, 192, 192, 0.25) 100%);
-  border-color: rgba(192, 192, 192, 0.3);
+  height: 110px;
+  background: linear-gradient(to top, rgba(192,192,192,0.04), rgba(192,192,192,0.2));
+  border-color: rgba(192,192,192,0.3);
 }
 
 .podium-stand.third .stand-bar {
-  height: 80px;
-  background: linear-gradient(to top, rgba(205, 127, 50, 0.05) 0%, rgba(205, 127, 50, 0.25) 100%);
-  border-color: rgba(205, 127, 50, 0.3);
+  height: 75px;
+  background: linear-gradient(to top, rgba(205,127,50,0.04), rgba(205,127,50,0.2));
+  border-color: rgba(205,127,50,0.3);
 }
 
-.podium-stand .score {
-  font-size: 0.9rem;
+.podium-stand .score { font-size: 0.85rem; font-weight: 700; color: rgba(255,255,255,0.7); }
+
+.scores-table-container { margin-top: 2rem; text-align: left; }
+.full-standings { display: flex; flex-direction: column; gap: 0.5rem; }
+.exit-btn { margin-top: 2rem; }
+
+/* ── STICKY HOST BAR ── */
+.host-sticky-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 0 2rem 1.25rem;
+  pointer-events: none;
+}
+
+.host-sticky-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  background: rgba(18, 20, 28, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(124, 77, 255, 0.3);
+  border-radius: 18px;
+  padding: 1rem 1.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 -4px 30px rgba(124, 77, 255, 0.1);
+  pointer-events: all;
+}
+
+.host-badge {
+  font-size: 0.85rem;
   font-weight: 700;
-  color: rgba(255,255,255,0.7);
+  color: #b388ff;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
-.scores-table-container {
-  margin-top: 2rem;
+.host-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
-.exit-btn {
-  margin-top: 2rem;
+.host-action-btn {
+  padding: 0.75rem 1.75rem;
+  font-size: 0.95rem;
 }
 
+.host-hint {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.4);
+}
+
+/* ── ERRORS ── */
 .error-banner {
   background: rgba(255, 75, 43, 0.15);
   border: 1px solid rgba(255, 75, 43, 0.3);
@@ -714,9 +781,28 @@ async function handleExit() {
   gap: 0.75rem;
 }
 
+/* ── TRANSITIONS ── */
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.slide-up-enter-active, .slide-up-leave-active {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.slide-up-enter-from, .slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(100%);
+}
+
+/* ── RESPONSIVE ── */
 @media (max-width: 768px) {
-  .answers-grid, .answers-grid-preview, .stats-grid {
-    grid-template-columns: 1fr;
-  }
+  .answers-grid { grid-template-columns: 1fr; }
+  .question-text { font-size: 1.5rem; }
+  .host-sticky-inner { flex-direction: column; gap: 0.75rem; text-align: center; }
+  .podium-stand { width: 90px; }
 }
 </style>
